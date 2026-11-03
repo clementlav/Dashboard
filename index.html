@@ -264,6 +264,51 @@
             },
         ];
 
+        // Bouton « Se connecter avec Google » (Google Identity Services, sans secret côté serveur).
+        const GoogleSignIn = ({ clientId, onCredential }) => {
+            const containerRef = useRef(null);
+            useEffect(() => {
+                if (!clientId) return;
+                let cancelled = false;
+                const render = () => {
+                    if (cancelled || !window.google || !window.google.accounts || !containerRef.current) return;
+                    window.google.accounts.id.initialize({
+                        client_id: clientId,
+                        callback: (response) => {
+                            if (response && response.credential) onCredential(response.credential);
+                        }
+                    });
+                    containerRef.current.innerHTML = '';
+                    window.google.accounts.id.renderButton(containerRef.current, {
+                        theme: 'filled_black',
+                        size: 'large',
+                        shape: 'pill',
+                        text: 'signin_with',
+                        locale: 'fr'
+                    });
+                };
+                if (window.google && window.google.accounts) {
+                    render();
+                    return () => { cancelled = true; };
+                }
+                const existing = document.getElementById('gsi-client');
+                if (existing) {
+                    existing.addEventListener('load', render);
+                    return () => { cancelled = true; existing.removeEventListener('load', render); };
+                }
+                const script = document.createElement('script');
+                script.src = 'https://accounts.google.com/gsi/client';
+                script.async = true;
+                script.defer = true;
+                script.id = 'gsi-client';
+                script.addEventListener('load', render);
+                document.head.appendChild(script);
+                return () => { cancelled = true; script.removeEventListener('load', render); };
+            }, [clientId]);
+            if (!clientId) return null;
+            return <div ref={containerRef} className="flex items-center justify-end" />;
+        };
+
         const App = () => {
             const [activeTab, setActiveTab] = useState('home');
             const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -307,6 +352,70 @@
             useEffect(() => { localStorage.setItem('myBookmarks', JSON.stringify(bookmarks)); }, [bookmarks]);
             useEffect(() => { localStorage.setItem('myEvents', JSON.stringify(events)); }, [events]);
             useEffect(() => { localStorage.setItem('myWatchlist', JSON.stringify(watchlist)); }, [watchlist]);
+
+            // Compte Google : les mêmes données sont enregistrées côté serveur (D1) quand on est connecté.
+            const hydratedRef = useRef(false);
+            const [user, setUser] = useState(null);
+            const [googleClientId, setGoogleClientId] = useState(null);
+            const [authReady, setAuthReady] = useState(false);
+            const [authError, setAuthError] = useState('');
+            const [syncState, setSyncState] = useState('idle');
+
+            useEffect(() => {
+                let cancelled = false;
+                const bootstrap = async () => {
+                    try {
+                        const config = await fetch('/api/config', { credentials: 'same-origin' }).then(r => r.json());
+                        if (cancelled) return;
+                        setGoogleClientId(config.googleClientId || null);
+                        const me = await fetch('/api/me', { credentials: 'same-origin' }).then(r => r.json());
+                        if (cancelled) return;
+                        setUser(me.user || null);
+                        if (me.user) {
+                            const res = await fetch('/api/data', { credentials: 'same-origin' });
+                            if (res.ok) {
+                                const payload = await res.json();
+                                const remote = payload && payload.data ? payload.data : null;
+                                if (remote) {
+                                    if (Array.isArray(remote.tasks)) setTasks(remote.tasks);
+                                    if (Array.isArray(remote.notes)) setNotes(remote.notes);
+                                    if (Array.isArray(remote.bookmarks)) setBookmarks(remote.bookmarks);
+                                    if (Array.isArray(remote.events)) setEvents(remote.events);
+                                    if (Array.isArray(remote.watchlist)) setWatchlist(remote.watchlist);
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        // Pas d'API disponible (aperçu statique local) : on reste en mode invité.
+                    } finally {
+                        if (!cancelled) {
+                            hydratedRef.current = true;
+                            setAuthReady(true);
+                        }
+                    }
+                };
+                bootstrap();
+                return () => { cancelled = true; };
+            }, []);
+
+            useEffect(() => {
+                if (!user || !hydratedRef.current) return;
+                const timer = setTimeout(async () => {
+                    setSyncState('saving');
+                    try {
+                        const res = await fetch('/api/data', {
+                            method: 'PUT',
+                            credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ data: { tasks, notes, bookmarks, events, watchlist } })
+                        });
+                        setSyncState(res.ok ? 'saved' : 'error');
+                    } catch (error) {
+                        setSyncState('error');
+                    }
+                }, 900);
+                return () => clearTimeout(timer);
+            }, [tasks, notes, bookmarks, events, watchlist, user]);
 
             const HomeView = () => {
                 const [newTask, setNewTask] = useState("");
@@ -1384,6 +1493,29 @@
                 <div className="fade-in max-w-2xl glass-card p-8 rounded-3xl">
                     <h2 className="text-2xl font-bold mb-8">Paramètres</h2>
                     <div className="space-y-6">
+                        <div className="flex flex-col gap-3 border-b border-[#c98f5a]/20 pb-6">
+                            <div>
+                                <h4 className="font-medium">Compte Google</h4>
+                                <p className="text-sm text-[#b39a88]">
+                                    {user
+                                        ? `Connecté avec ${user.email} : vos notes, événements et watchlist sont enregistrés sur ce compte.`
+                                        : 'Connectez-vous avec Google pour retrouver vos notes, événements et watchlist sur tous vos appareils.'}
+                                </p>
+                            </div>
+                            {user && (
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <span className="text-xs text-[#a08a78]">{syncState === 'saving' ? 'Enregistrement…' : syncState === 'error' ? 'Enregistrement impossible' : 'Tout est synchronisé'}</span>
+                                    <button onClick={signOut} className="px-4 py-2 rounded-xl bg-[#3a2820] border border-[#c98f5a]/25 text-sm font-semibold hover:bg-[#4a352a] transition">Se déconnecter</button>
+                                </div>
+                            )}
+                            {!user && googleClientId && (
+                                <GoogleSignIn clientId={googleClientId} onCredential={handleGoogleCredential} />
+                            )}
+                            {!user && authReady && !googleClientId && (
+                                <p className="text-xs text-amber-300/80">Connexion Google non configurée : renseignez GOOGLE_CLIENT_ID et SESSION_SECRET dans les secrets du site.</p>
+                            )}
+                            {authError && <p className="text-xs text-red-400">{authError}</p>}
+                        </div>
                         <div className="flex justify-between items-center border-b border-white/10 pb-4">
                             <div>
                                 <h4 className="font-medium">Thème Sombre</h4>
@@ -1404,6 +1536,36 @@
                     </div>
                 </div>
             );
+
+            const handleGoogleCredential = async (credential) => {
+                setAuthError('');
+                try {
+                    const localData = { tasks, notes, bookmarks, events, watchlist };
+                    const res = await fetch('/api/auth/google', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ credential, localData })
+                    });
+                    const payload = await res.json();
+                    if (!res.ok) {
+                        setAuthError(payload && payload.error ? payload.error : 'Connexion refusée');
+                        return;
+                    }
+                    window.location.reload();
+                } catch (error) {
+                    setAuthError('Connexion impossible pour le moment.');
+                }
+            };
+
+            const signOut = async () => {
+                try {
+                    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+                } catch (error) {
+                    // Le rechargement ci-dessous suffit à revenir au mode invité.
+                }
+                window.location.reload();
+            };
 
             const navItems = [
                 { id: 'home', label: 'Dashboard', icon: 'home' },
@@ -1459,9 +1621,25 @@
                                     <Icon name="search" className="w-4 h-4 text-gray-400" />
                                     <input type="text" placeholder="Rechercher..." className="bg-transparent border-none outline-none text-sm w-32 md:w-48 placeholder-gray-500" />
                                 </div>
-                                <div className="w-10 h-10 rounded-full bg-[#8b5e3c] border border-[#c98f5a]/50 cursor-pointer overflow-hidden shadow-lg hover:scale-110 transition">
-                                   <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="avatar" />
-                                </div>
+                                {authReady && user && (
+                                    <div className="flex items-center gap-2 sm:gap-3">
+                                        <div className="hidden sm:block text-right leading-tight">
+                                            <div className="text-xs font-semibold truncate max-w-[140px]">{user.name || user.email}</div>
+                                            <div className="text-[10px] text-[#a08a78]">{syncState === 'saving' ? 'Enregistrement…' : syncState === 'error' ? 'Synchro impossible' : 'Synchronisé'}</div>
+                                        </div>
+                                        <div className="w-9 h-9 rounded-full bg-[#8b5e3c] border border-[#c98f5a]/50 overflow-hidden shrink-0">
+                                            {user.picture
+                                                ? <img src={user.picture} alt="" />
+                                                : <div className="w-full h-full flex items-center justify-center"><Icon name="user" className="w-4 h-4" /></div>}
+                                        </div>
+                                        <button onClick={signOut} title="Se déconnecter" className="w-9 h-9 rounded-xl bg-[#3a2820] border border-[#c98f5a]/25 text-[#e8d5c4] flex items-center justify-center hover:bg-[#4a352a] transition">
+                                            <Icon name="log-out" className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                )}
+                                {authReady && !user && (
+                                    <GoogleSignIn clientId={googleClientId} onCredential={handleGoogleCredential} />
+                                )}
                             </div>
                             {mobileMenuOpen && (
                                 <React.Fragment>
