@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Dashboard - K&Z Style</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            background-image: radial-gradient(#333 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .glass-card {
+            background: rgba(30, 30, 30, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 10px; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* FullCalendar Dark Theme */
+        .fc {
+            --fc-border-color: rgba(255, 255, 255, 0.1);
+            --fc-page-bg-color: transparent;
+            --fc-neutral-bg-color: rgba(255, 255, 255, 0.05);
+            --fc-list-event-hover-bg-color: rgba(255, 255, 255, 0.1);
+        }
+        .fc .fc-toolbar-title { color: #ffffff; font-size: 1.25rem; font-weight: bold; }
+        .fc .fc-button-primary { background-color: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.1); color: #fff; border-radius: 0.75rem; text-transform: capitalize; }
+        .fc .fc-button-primary:hover { background-color: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.2); }
+        .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: #b3c7f9; border-color: #b3c7f9; color: #000; font-weight: bold; }
+        .fc .fc-daygrid-day-number { color: #ccc; text-decoration: none; font-size: 0.85rem; }
+        .fc .fc-col-header-cell-cushion { color: #888; text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Composant d'icône Lucide sécurisé pour React
+        const Icon = ({ name, className = "w-5 h-5" }) => {
+            const spanRef = useRef(null);
+            useEffect(() => {
+                if (spanRef.current && window.lucide) {
+                    spanRef.current.innerHTML = `<i data-lucide="${name}" class="${className}"></i>`;
+                    window.lucide.createIcons({
+                        nameAttr: 'data-lucide',
+                        attrs: { class: className },
+                        el: spanRef.current
+                    });
+                }
+            }, [name, className]);
+            return <span ref={spanRef} className="inline-flex items-center justify-center"></span>;
+        };
+
+        // Marqueurs hors composant : les vues étant définies dans App, elles sont remontées à chaque
+        // rendu et perdent leur état local. Ces deux valeurs doivent donc survivre aux remontages.
+        let watchlistSynced = false;
+        let lastRefreshLabel = '';
+        let actCategoryFilter = 'film';
+
+        // Statuts de suivi d'une œuvre, choisis au moment de l'ajout à la liste
+        const WATCH_STATUSES = [
+            { id: 'vu', label: '✅ Vu', cls: 'bg-emerald-600' },
+            { id: 'en-cours', label: '▶️ En cours', cls: 'bg-blue-600' },
+            { id: 'en-attente', label: '⏳ En attente', cls: 'bg-amber-600' },
+            { id: 'pas-fini', label: '⏸️ Pas fini', cls: 'bg-purple-600' },
+            { id: 'abandonne', label: '⛔ Abandonné', cls: 'bg-red-600' }
+        ];
+        const watchStatus = id => WATCH_STATUSES.find(s => s.id === id) || null;
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('home');
+            const [tasks, setTasks] = useState(() => {
+                const saved = localStorage.getItem('myTasks_v2');
+                return saved ? JSON.parse(saved) : [
+                    { id: 1, text: 'Stand up', completed: true, category: 'work' },
+                    { id: 2, text: 'English lesson', completed: false, category: 'education' },
+                    { id: 3, text: 'Work out', completed: false, category: 'health' },
+                    { id: 4, text: 'Prepare ABC Project', completed: false, category: 'work' }
+                ];
+            });
+            const [notes, setNotes] = useState(() => {
+                const saved = localStorage.getItem('myNotes');
+                return saved ? JSON.parse(saved) : [
+                    { id: 1, title: 'Idées de projet', content: 'Repenser le design du portfolio...', date: '2026-11-02' }
+                ];
+            });
+            const [bookmarks, setBookmarks] = useState(() => {
+                const saved = localStorage.getItem('myBookmarks');
+                return saved ? JSON.parse(saved) : [
+                    { id: 1, name: 'Dribbble', url: 'https://dribbble.com' },
+                    { id: 2, name: 'GitHub', url: 'https://github.com' }
+                ];
+            });
+            const [events, setEvents] = useState(() => {
+                const saved = localStorage.getItem('myEvents');
+                return saved ? JSON.parse(saved) : [];
+            });
+            const [watchlist, setWatchlist] = useState(() => {
+                const saved = localStorage.getItem('myWatchlist');
+                return saved ? JSON.parse(saved) : [
+                    { id: 1, title: 'Interstellar', type: 'Film', rating: 5, comment: 'Chef d\'œuvre visuel et scénaristique.', image: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80', date: '2026-10-15' },
+                    { id: 2, title: 'Arcane', type: 'Série', rating: 5, comment: 'Animation et bande son d\'une qualité exceptionnelle.', image: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80', date: '2026-10-20' },
+                    { id: 3, title: 'Demon Slayer', type: 'Anime', rating: 4.5, comment: 'Combats et univers visuel incroyables.', image: 'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=800&q=80', date: '2026-11-01' }
+                ];
+            });
+
+            useEffect(() => { localStorage.setItem('myTasks_v2', JSON.stringify(tasks)); }, [tasks]);
+            useEffect(() => { localStorage.setItem('myNotes', JSON.stringify(notes)); }, [notes]);
+            useEffect(() => { localStorage.setItem('myBookmarks', JSON.stringify(bookmarks)); }, [bookmarks]);
+            useEffect(() => { localStorage.setItem('myEvents', JSON.stringify(events)); }, [events]);
+            useEffect(() => { localStorage.setItem('myWatchlist', JSON.stringify(watchlist)); }, [watchlist]);
+
+            const HomeView = () => {
+                const [newTask, setNewTask] = useState("");
+                const completedCount = tasks.filter(t => t.completed).length;
+                const todayStr = new Date().toISOString().split('T')[0];
+                const todayEvents = events.filter(ev => ev.start && ev.start.startsWith(todayStr));
+
+                const addTask = (e) => {
+                    if (e.key === 'Enter' && newTask.trim() !== '') {
+                        setTasks([...tasks, { id: Date.now(), text: newTask, completed: false, category: 'general' }]);
+                        setNewTask("");
+                    }
+                };
+                const toggleTask = (id) => setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+                const deleteTask = (id, e) => { e.stopPropagation(); setTasks(tasks.filter(t => t.id !== id)); };
+
+                return (
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-8 fade-in">
+                        <div className="md:col-span-3 flex flex-col gap-6">
+                            <div onClick={() => setActiveTab('notes')} className="bg-[#a8e6cf] text-black p-6 rounded-3xl cursor-pointer hover:scale-[1.02] transition shadow-lg flex justify-between items-center group">
+                                <div><h3 className="font-bold text-xl mb-1">Mes Notes</h3><p className="text-sm opacity-70">{notes.length} notes</p></div>
+                                <Icon name="arrow-right" className="w-5 h-5 opacity-50 group-hover:opacity-100 transition" />
+                            </div>
+                            <div onClick={() => setActiveTab('tasks')} className="bg-[#b3c7f9] text-black p-6 rounded-3xl cursor-pointer hover:scale-[1.02] transition shadow-lg flex justify-between items-center group">
+                                <div><div className="mb-2"><Icon name="check-square" className="w-6 h-6" /></div><h3 className="font-bold text-xl mb-1">Mes Tâches</h3><p className="text-sm opacity-70">{tasks.length - completedCount} restantes</p></div>
+                                <Icon name="arrow-right" className="w-5 h-5 opacity-50 group-hover:opacity-100 transition" />
+                            </div>
+                            <div className="glass-card p-6 rounded-3xl mt-2">
+                                <h3 className="text-4xl font-bold text-white mb-2">{tasks.length > 0 ? Math.round((completedCount/tasks.length)*100) : 0}%</h3>
+                                <p className="text-sm text-gray-400 mb-6">Productivité du jour</p>
+                                <div className="flex gap-2 items-end h-24">
+                                    {[60, 80, 100, 40, 90, 64, 35].map((h, i) => (<div key={i} className="flex-1 bg-gray-700 rounded-t-sm hover:bg-gray-500 transition-colors relative group" style={{ height: `${h}%` }}></div>))}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="md:col-span-5 flex flex-col gap-6">
+                            <div className="bg-[#ffcda3] text-black p-8 rounded-[2rem] shadow-xl relative overflow-hidden h-full">
+                                <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-2xl">Aujourd'hui</h3><div className="flex items-center gap-2"><span className="text-sm font-medium bg-black/10 px-3 py-1 rounded-full">{completedCount}/{tasks.length}</span></div></div>
+                                <div className="mb-6"><input type="text" placeholder="Ajouter une tâche (Entrée)..." value={newTask} onChange={(e) => setNewTask(e.target.value)} onKeyDown={addTask} className="w-full bg-black/5 border-none outline-none p-4 rounded-xl placeholder-black/40 text-black font-medium focus:bg-black/10 transition" /></div>
+                                <div className="flex flex-col gap-3 overflow-y-auto max-h-[300px] pr-2">
+                                    {tasks.map(task => (
+                                        <div key={task.id} className="flex items-center justify-between group cursor-pointer p-2 hover:bg-black/5 rounded-lg transition" onClick={() => toggleTask(task.id)}>
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-6 h-6 rounded-full border-[2px] flex items-center justify-center transition-colors ${task.completed ? 'border-black bg-black' : 'border-black/50 group-hover:border-black'}`}>{task.completed && <Icon name="check" className="w-4 h-4 text-[#ffcda3]" />}</div>
+                                                <span className={`font-medium text-lg transition-all ${task.completed ? 'line-through opacity-40' : ''}`}>{task.text}</span>
+                                            </div>
+                                            <button onClick={(e) => deleteTask(task.id, e)} className="opacity-0 group-hover:opacity-100 text-black/40 hover:text-black transition p-2"><Icon name="trash-2" className="w-4 h-4" /></button>
+                                        </div>
+                                    ))}
+                                    {tasks.length === 0 && <p className="text-center opacity-50 mt-4">Aucune tâche pour aujourd'hui !</p>}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="md:col-span-4 flex flex-col gap-6">
+                            <div className="flex justify-between items-center"><h3 className="font-bold text-xl">Planning du jour</h3><button onClick={() => setActiveTab('calendar')} className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:scale-110 transition shadow-lg"><Icon name="plus" className="w-4 h-4" /></button></div>
+                            <div className="glass-card p-6 rounded-3xl h-full flex flex-col gap-4">
+                                {todayEvents.length > 0 ? todayEvents.map((ev, idx) => {
+                                    const timeStr = ev.start && ev.start.includes('T') ? ev.start.split('T')[1].substring(0, 5) : 'Toute la journée';
+                                    return (
+                                        <div key={ev.id || idx} className="p-4 rounded-2xl shadow-md text-black font-medium transition hover:scale-[1.01]" style={{ backgroundColor: ev.color || '#ffcda3' }}>
+                                            <div className="flex items-center gap-3 font-bold mb-1">
+                                                <span className="text-xs bg-black/10 px-2 py-0.5 rounded-md">{timeStr}</span>
+                                                <div className="flex items-center gap-2"><Icon name="check-circle-2" className="w-4 h-4" /> {ev.title}</div>
+                                            </div>
+                                        </div>
+                                    );
+                                }) : (
+                                    <div className="text-center text-gray-400 py-8 my-auto">
+                                        <Icon name="calendar" className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                        <p className="text-sm">Aucun événement prévu aujourd'hui</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const TasksView = () => {
+                const [newTask, setNewTask] = useState("");
+                const addTask = (e) => {
+                    if (e.key === 'Enter' && newTask.trim() !== '') { setTasks([...tasks, { id: Date.now(), text: newTask, completed: false, category: 'general' }]); setNewTask(""); }
+                };
+                const toggleTask = (id) => setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+                const deleteTask = (id) => setTasks(tasks.filter(t => t.id !== id));
+                return (
+                    <div className="fade-in max-w-4xl mx-auto">
+                        <div className="bg-[#ffcda3] p-8 rounded-3xl text-black">
+                            <h2 className="text-3xl font-bold mb-6">Toutes mes tâches</h2>
+                            <input type="text" placeholder="Ajouter une tâche..." value={newTask} onChange={(e) => setNewTask(e.target.value)} onKeyDown={addTask} className="w-full bg-black/10 p-4 rounded-xl mb-8 outline-none placeholder-black/50" />
+                            <div className="space-y-4">
+                                {tasks.map(task => (
+                                    <div key={task.id} className="flex justify-between items-center bg-white/20 p-4 rounded-xl hover:bg-white/30 transition cursor-pointer" onClick={() => toggleTask(task.id)}>
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-6 h-6 rounded-full border-[2px] border-black flex items-center justify-center ${task.completed ? 'bg-black' : ''}`}>{task.completed && <Icon name="check" className="w-4 h-4 text-[#ffcda3]" />}</div>
+                                            <span className={`text-xl font-medium ${task.completed ? 'line-through opacity-50' : ''}`}>{task.text}</span>
+                                        </div>
+                                        <button onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }} className="p-2 hover:bg-black/10 rounded-lg transition"><Icon name="trash-2" className="w-5 h-5" /></button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const CalendarView = () => {
+                const calendarRef = useRef(null);
+                const [showModal, setShowModal] = useState(false);
+                const [title, setTitle] = useState('');
+                const [date, setDate] = useState('');
+                const [color, setColor] = useState('#ffcda3');
+
+                useEffect(() => {
+                    if (calendarRef.current && window.FullCalendar) {
+                        const calendar = new window.FullCalendar.Calendar(calendarRef.current, {
+                            initialView: 'dayGridMonth',
+                            headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+                            events: events,
+                            eventClick: function(info) {
+                                setEvents(prev => prev.filter(e => e.id !== info.event.id));
+                            }
+                        });
+                        calendar.render();
+                        return () => calendar.destroy();
+                    }
+                }, [events]);
+
+                const handleAddEvent = (e) => {
+                    e.preventDefault();
+                    if (!title || !date) return;
+                    const newEv = { id: String(Date.now()), title, start: date, color };
+                    setEvents([...events, newEv]);
+                    setTitle(''); setDate(''); setShowModal(false);
+                };
+
+                return (
+                    <div className="fade-in glass-card p-8 rounded-3xl">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold">Calendrier Interactif</h2>
+                            <button onClick={() => setShowModal(true)} className="bg-white text-black font-bold px-4 py-2 rounded-xl flex items-center gap-2 hover:scale-105 transition">
+                                <Icon name="plus" className="w-4 h-4" /> Ajouter un événement
+                            </button>
+                        </div>
+                        <div ref={calendarRef}></div>
+
+                        {showModal && (
+                            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                                <div className="glass-card bg-[#1a1a1a] p-6 rounded-3xl w-full max-w-md border border-white/10 text-white">
+                                    <h3 className="text-xl font-bold mb-4">Nouvel Événement</h3>
+                                    <form onSubmit={handleAddEvent} className="flex flex-col gap-4">
+                                        <div>
+                                            <label className="text-xs text-gray-400 mb-1 block">Titre</label>
+                                            <input type="text" required value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-white/5 border border-white/10 p-3 rounded-xl outline-none" placeholder="Réunion, Anniversaire..." />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-400 mb-1 block">Date & Heure</label>
+                                            <input type="datetime-local" required value={date} onChange={e => setDate(e.target.value)} className="w-full bg-white/5 border border-white/10 p-3 rounded-xl outline-none" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-400 mb-1 block">Couleur du badge</label>
+                                            <div className="flex gap-3 mt-1">
+                                                {['#ffcda3', '#a8e6cf', '#b3c7f9', '#d8b4fe'].map(c => (
+                                                    <div key={c} onClick={() => setColor(c)} className={`w-8 h-8 rounded-full cursor-pointer transition ${color === c ? 'ring-2 ring-white scale-110' : ''}`} style={{ backgroundColor: c }}></div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3 mt-4">
+                                            <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 rounded-xl border border-white/10">Annuler</button>
+                                            <button type="submit" className="flex-1 py-3 rounded-xl bg-white text-black font-bold">Ajouter</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            const NotesView = () => {
+                const [newNote, setNewNote] = useState({ title: '', content: '' });
+                const addNote = () => { if(newNote.title || newNote.content) { setNotes([{ id: Date.now(), ...newNote, date: new Date().toLocaleDateString() }, ...notes]); setNewNote({ title: '', content: '' }); } };
+                const deleteNote = (id) => setNotes(notes.filter(n => n.id !== id));
+                return (
+                    <div className="fade-in grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="glass-card p-6 rounded-3xl flex flex-col gap-4 h-fit">
+                            <h3 className="text-xl font-bold">Nouvelle Note</h3>
+                            <input type="text" placeholder="Titre" value={newNote.title} onChange={e => setNewNote({...newNote, title: e.target.value})} className="bg-white/5 border border-white/10 p-3 rounded-lg outline-none focus:border-[#a8e6cf] transition"/>
+                            <textarea placeholder="Contenu..." value={newNote.content} onChange={e => setNewNote({...newNote, content: e.target.value})} className="bg-white/5 border border-white/10 p-3 rounded-lg outline-none min-h-[150px] focus:border-[#a8e6cf] transition"></textarea>
+                            <button onClick={addNote} className="bg-[#a8e6cf] text-black font-bold py-3 rounded-lg hover:opacity-90 transition">Sauvegarder</button>
+                        </div>
+                        <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            {notes.map(note => (
+                                <div key={note.id} className="bg-[#a8e6cf] text-black p-6 rounded-3xl shadow-lg relative group">
+                                    <button onClick={() => deleteNote(note.id)} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition p-2 hover:bg-black/10 rounded-full"><Icon name="x" className="w-4 h-4" /></button>
+                                    <h4 className="font-bold text-xl mb-2">{note.title}</h4>
+                                    <p className="opacity-80 mb-4 whitespace-pre-wrap">{note.content}</p>
+                                    <span className="text-xs opacity-50">{note.date}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            const EventsView = () => {
+                const [eventsList, setEventsList] = useState(() => {
+                    const saved = localStorage.getItem('myCustomEvents_v5');
+                    return saved ? JSON.parse(saved) : [];
+                });
+                const [showModal, setShowModal] = useState(false);
+                const [newTitle, setNewTitle] = useState('');
+                const [newDate, setNewDate] = useState('');
+                const [newCategory, setNewCategory] = useState('vélo');
+                const [newLocation, setNewLocation] = useState('');
+                const [newImage, setNewImage] = useState('');
+                const [isSearching, setIsSearching] = useState(false);
+
+                const rallyEvents = [
+                    { id: 'rally-1', title: 'WRC Rallye Monte-Carlo 2026', category: 'rally', date: '2026-01-22', location: 'Monaco / Gap, France', image: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80' },
+                    { id: 'rally-2', title: 'WRC Rally Sweden 2026', category: 'rally', date: '2026-02-12', location: 'Umeå, Suède', image: 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&w=800&q=80' },
+                    { id: 'rally-3', title: 'WRC Safari Rally Kenya 2026', category: 'rally', date: '2026-03-26', location: 'Naivasha, Kenya', image: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=800&q=80' },
+                    { id: 'rally-4', title: 'WRC Rally Islas Canarias 2026', category: 'rally', date: '2026-04-23', location: 'Las Palmas, Espagne', image: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80' },
+                    { id: 'rally-5', title: 'WRC Secto Rally Finland 2026', category: 'rally', date: '2026-07-30', location: 'Jyväskylä, Finlande', image: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=80' }
+                ];
+
+                useEffect(() => {
+                    localStorage.setItem('myCustomEvents_v5', JSON.stringify(eventsList));
+                }, [eventsList]);
+
+                const handleSearchRally = () => {
+                    setIsSearching(true);
+                    setTimeout(() => {
+                        const existingIds = new Set(eventsList.map(e => e.id));
+                        const newRallies = rallyEvents.filter(r => !existingIds.has(r.id));
+                        setEventsList(prev => [...newRallies, ...prev]);
+                        setIsSearching(false);
+                    }, 500);
+                };
+
+                const handleAddCustomEvent = (e) => {
+                    e.preventDefault();
+                    if (!newTitle.trim() || !newDate) return;
+                    const defaultImgs = {
+                        'vélo': 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=800&q=80',
+                        'rally': 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80'
+                    };
+                    const item = {
+                        id: 'custom-' + Date.now(),
+                        title: newTitle.trim(),
+                        category: newCategory,
+                        date: newDate,
+                        location: newLocation.trim() || 'Lieu non spécifié',
+                        image: newImage.trim() || defaultImgs[newCategory] || defaultImgs['vélo']
+                    };
+                    setEventsList([item, ...eventsList]);
+                    setNewTitle(''); setNewDate(''); setNewLocation(''); setNewImage('');
+                    setShowModal(false);
+                };
+
+                const handleDelete = (id) => {
+                    setEventsList(eventsList.filter(e => e.id !== id));
+                };
+
+                return (
+                    <div className="fade-in flex flex-col gap-6">
+                        <div className="glass-card bg-gradient-to-r from-neutral-900 via-neutral-900 to-red-950 p-8 rounded-3xl border border-red-500/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-xl">
+                            <div>
+                                <h2 className="text-3xl font-extrabold text-white mb-2">Événements Rallye & Vélo</h2>
+                                <p className="text-gray-300 text-sm max-w-xl">
+                                    Événements officiels de Rallye WRC (Rally.tv) et vos événements vélo personnalisés.
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                                <button
+                                    onClick={handleSearchRally}
+                                    disabled={isSearching}
+                                    className="bg-red-600 hover:bg-red-500 text-white font-extrabold px-5 py-3 rounded-2xl transition flex items-center gap-2 shadow-xl hover:scale-105 text-sm disabled:opacity-50"
+                                >
+                                    <svg className={`w-4 h-4 ${isSearching ? "animate-spin" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                    {isSearching ? "Recherche..." : "Rechercher Rally.tv"}
+                                </button>
+                                <button
+                                    onClick={() => setShowModal(true)}
+                                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-5 py-3 rounded-2xl transition flex items-center gap-2 shadow-xl hover:scale-105 text-sm"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                                    + Événement Vélo
+                                </button>
+                            </div>
+                        </div>
+
+                        {showModal && (
+                            <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                                <div className="glass-card bg-[#1a1a1a] p-6 rounded-3xl w-full max-w-lg border border-emerald-500/30 text-white shadow-2xl">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h3 className="text-xl font-bold flex items-center gap-2">
+                                            <span className="text-emerald-400">🚲</span> Ajouter un événement Vélo
+                                        </h3>
+                                        <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white"><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                                    </div>
+                                    <form onSubmit={handleAddCustomEvent} className="flex flex-col gap-4">
+                                        <div>
+                                            <label className="text-xs text-gray-400 block mb-1">Titre de l'événement *</label>
+                                            <input type="text" required value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Ex: Red Bull Rampage, Sortie VTT..." className="w-full bg-white/5 border border-white/10 p-3 rounded-xl outline-none focus:border-emerald-500 text-sm" />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-xs text-gray-400 block mb-1">Date *</label>
+                                                <input type="date" required value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full bg-white/5 border border-white/10 p-3 rounded-xl outline-none focus:border-emerald-500 text-sm" />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-gray-400 block mb-1">Discipline</label>
+                                                <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className="w-full bg-[#242424] border border-white/10 p-3 rounded-xl outline-none focus:border-emerald-500 text-sm text-white">
+                                                    <option value="vélo">🚲 Vélo / VTT</option>
+                                                    <option value="rally">🏎️ Rallye</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-400 block mb-1">Lieu</label>
+                                            <input type="text" value={newLocation} onChange={e => setNewLocation(e.target.value)} placeholder="Ex: Utah (USA), Chamonix..." className="w-full bg-white/5 border border-white/10 p-3 rounded-xl outline-none focus:border-emerald-500 text-sm" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-400 block mb-1">URL Image (Optionnel)</label>
+                                            <input type="url" value={newImage} onChange={e => setNewImage(e.target.value)} placeholder="https://..." className="w-full bg-white/5 border border-white/10 p-3 rounded-xl outline-none focus:border-emerald-500 text-sm" />
+                                        </div>
+                                        <div className="flex gap-3 mt-4">
+                                            <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 rounded-xl border border-white/10 text-gray-300 text-sm">Annuler</button>
+                                            <button type="submit" className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold text-white text-sm">Enregistrer</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
+
+                        {eventsList.length === 0 ? (
+                            <div className="glass-card p-16 rounded-3xl text-center my-6 flex flex-col items-center justify-center gap-4 border border-dashed border-white/10">
+                                <svg className="w-12 h-12 text-red-400 opacity-50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                <h3 className="text-xl font-bold text-white">Aucun événement affiché</h3>
+                                <p className="text-gray-400 text-sm max-w-md">
+                                    Cliquez sur <strong className="text-red-400">Rechercher Rally.tv</strong> pour charger le calendrier WRC officiel ou ajoutez vos événements vélo.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {eventsList.map(item => (
+                                    <div key={item.id} className="glass-card rounded-3xl overflow-hidden flex flex-col justify-between hover:border-red-500/40 transition duration-300 group shadow-lg">
+                                        <div>
+                                            <div className="relative h-48 overflow-hidden bg-neutral-900">
+                                                <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" onError={(e) => { e.target.onerror = null; e.target.src='https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80'; }} />
+                                                <div className="absolute top-3 left-3 flex gap-2">
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${item.category === 'rally' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}>
+                                                        {item.category === 'rally' ? '🏎️ Rallye WRC' : '🚲 Vélo / VTT'}
+                                                    </span>
+                                                </div>
+                                                <button onClick={() => handleDelete(item.id)} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 hover:bg-red-600 text-white flex items-center justify-center backdrop-blur-md transition opacity-0 group-hover:opacity-100">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                                </button>
+                                            </div>
+                                            <div className="p-6">
+                                                <h3 className="font-bold text-xl text-white mb-2">{item.title}</h3>
+                                                <div className="flex items-center gap-2 text-gray-400 text-xs mb-2">
+                                                    <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> {item.date}
+                                                </div>
+                                                <div className="flex items-center gap-2 text-gray-400 text-xs mb-4">
+                                                    <svg className="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> {item.location}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            const WatchlistView = () => {
+                const [selectedType, setSelectedType] = useState('all');
+                const [showModal, setShowModal] = useState(false);
+                const [editingId, setEditingId] = useState(null);
+                const [searchQuery, setSearchQuery] = useState('');
+                const [apiResults, setApiResults] = useState([]);
+                const [isSearchingApi, setIsSearchingApi] = useState(false);
+
+                const [title, setTitle] = useState('');
+                const [type, setType] = useState('Film');
+                const [rating, setRating] = useState(5);
+                const [comment, setComment] = useState('');
+                const [image, setImage] = useState('');
+                const [isRefreshing, setIsRefreshing] = useState(false);
+                const [lastRefresh, setLastRefresh] = useState(lastRefreshLabel);
+                const [actCategory, setActCategory] = useState(actCategoryFilter);
+                const changeActCategory = value => { actCategoryFilter = value; setActCategory(value); };
+                const [status, setStatus] = useState('en-attente');
+                // Actualité en cours d'ajout à la liste personnelle (null = fenêtre fermée)
+                const [quickAdd, setQuickAdd] = useState(null);
+                // Programmation Kinepolis construite au chargement, réutilisée par le bouton Actualiser
+                const actualitesRef = useRef([]);
+
+                // Chargement initial des films populaires et actualités IMDb par défaut
+                useEffect(() => {
+                    const fetchDefaultMovies = async () => {
+                        try {
+                            setIsSearchingApi(true);
+                            
+                            // Programmation réelle du Kinepolis Béziers (9 salles) - séances du 3 novembre 2026
+                            // Source : allocine.fr/seance/salle_gen_cs=W3450 - notes spectateurs AlloCiné
+                            const kinepolisPosters = [
+                                'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=800&q=80',
+                                'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80',
+                                'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=800&q=80',
+                                'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80',
+                                'https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=800&q=80',
+                                'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=800&q=80'
+                            ];
+                            const kinepolisFilms = [
+                                { title: "Papa où t'es ?", rating: 4.5, comment: "Documentaire · Basile Monnot, Samy Bouyssié · Sortie le 28/10/2026", image: 'https://fr.web.img3.acsta.net/c_320_426/img/2d/5b/2d5be7939e2b342391de951db5694ca7.jpg' },
+                                { title: "Moulin", rating: 3.5, comment: "Drame historique · László Nemes · Sortie le 28/10/2026", image: 'https://fr.web.img6.acsta.net/c_320_426/img/0f/7f/0f7fb216155bf7bcf7bb69d9e2f65310.jpg' },
+                                { title: "Le Fantôme de l'Opéra", rating: 3.0, comment: "Drame fantastique · Alexandre Castagnetti · Sortie le 28/10/2026", image: 'https://fr.web.img2.acsta.net/c_320_426/img/9e/85/9e85825c32a9d2be8135074c9e45c870.jpg' },
+                                { title: "Quelques mots d'amour", rating: 4.1, comment: "Comédie dramatique · Rudi Rosenberg · Sortie le 28/10/2026", image: 'https://fr.web.img5.acsta.net/c_320_426/img/d2/e4/d2e423fe953024eca9f0ebb7b2552db2.jpg' },
+                                { title: "Hunger Games - La Révolte : Partie 2", rating: 3.4, comment: "Aventure · Francis Lawrence · Reprise le 28/10/2026", image: 'https://fr.web.img4.acsta.net/c_320_426/img/62/0f/620f0ffa8f7e08d590b5b973411af6ee.jpg' },
+                                { title: "L'Affaire Marie-Claire", rating: 3.6, comment: "Thriller judiciaire · Lauriane Escaffre, Yvo Muller · Sortie le 04/11/2026", image: 'https://fr.web.img3.acsta.net/c_320_426/img/4a/3c/4a3cf95bb345d5d71bdc7acf3430323b.jpg' },
+                                { title: "Wild Horse Nine", rating: 3.7, comment: "Thriller · Martin McDonagh · Sortie le 04/11/2026", image: 'https://fr.web.img6.acsta.net/c_320_426/img/19/2c/192c21b88207a32bb9c1a043c51f053b.jpg' },
+                                { title: "Un bon patron", rating: 4.0, comment: "Comédie · Philippe de Chauveron · Sortie le 04/11/2026", image: 'https://fr.web.img6.acsta.net/c_320_426/img/e0/fa/e0fa1b691ed74bcdc54a9761aa33dbb4.jpg' },
+                                { title: "Peppa fête Noël", rating: 4.0, comment: "Animation · Mark Baker, Neville Astley · Sortie le 04/11/2026", image: 'https://fr.web.img6.acsta.net/c_320_426/img/60/99/6099fc0962b069b0b087541354161411.jpg' },
+                                { title: "Ma toute petite école", rating: 3.0, comment: "Documentaire · Pascal Plisson · Sortie le 04/11/2026", image: 'https://fr.web.img3.acsta.net/c_320_426/img/54/a7/54a7b09464573f6df8a94e9ca2cd629e.jpg' },
+                                { title: "Karma", rating: 4.1, comment: "Drame thriller · Guillaume Canet · Sortie le 21/10/2026", image: 'https://fr.web.img3.acsta.net/c_320_426/img/94/0a/940afff3ed3b09677bf94e2bc7c3009b.jpg' },
+                                { title: "Les Misérables", rating: 4.1, comment: "Drame historique · Fred Cavayé · Sortie le 14/10/2026", image: 'https://fr.web.img5.acsta.net/c_320_426/img/5a/41/5a4186d62d534f2da65c2e9e8e822a34.jpg' },
+                                { title: "La Maison de nos rêves", rating: 2.5, comment: "Comédie · Claude Zidi Jr. · Sortie le 07/10/2026", image: 'https://fr.web.img4.acsta.net/c_320_426/img/7f/e6/7fe6fefcab6e4951dac81cebd7c5e202.jpg' },
+                                { title: "Notre salut", rating: 3.7, comment: "Drame historique · Emmanuel Marre · Sortie le 30/09/2026", image: 'https://fr.web.img5.acsta.net/c_320_426/img/b7/ac/b7acc48dac20e8329866a199e0ff78e8.jpg' },
+                                { title: "Minotaure", rating: 3.9, comment: "Drame · Andreï Zviaguintsev · Sortie le 14/10/2026", image: 'https://fr.web.img6.acsta.net/c_320_426/img/f9/db/f9dbbc962b3358af6569ec1739edfa54.jpg' },
+                                { title: "Malfaisante", rating: 1.9, comment: "Épouvante-horreur · Rob Savage · Sortie le 14/10/2026", image: 'https://fr.web.img6.acsta.net/c_320_426/img/9e/c5/9ec5c971224bc443153c1a8da6c73e07.jpg' },
+                                { title: "L'île des souvenirs", rating: 3.8, comment: "Animation aventure · Joel Crawford, Januel P. Mercado · Sortie le 21/10/2026", image: 'https://fr.web.img6.acsta.net/c_320_426/img/56/7e/567e74d867a1c88b20897c5d7f92d4dd.jpg' },
+                                { title: "Le Roi du Game", rating: 3.2, comment: "Comédie · Eric Judor · Sortie le 21/10/2026", image: 'https://fr.web.img6.acsta.net/c_320_426/img/21/11/211184243b4ab7c37127ace9ced2e939.jpg' },
+                                { title: "Street Fighter", rating: 2.4, comment: "Action · Kitao Sakurai · Sortie le 14/10/2026", image: 'https://fr.web.img3.acsta.net/c_320_426/img/fc/20/fc20187ddbbd4af991999e32c9a03fb4.jpg' },
+                                { title: "Heart Of The Beast", rating: 3.8, comment: "Action aventure · David Ayer · Sortie le 23/09/2026", image: 'https://fr.web.img3.acsta.net/c_320_426/img/6f/af/6faf7d9aa879bd9374e773f31db44956.jpg' },
+                                { title: "Mochy", rating: 3.2, comment: "Animation · Jérémie Degruson, Yanis Belaid · Sortie le 14/10/2026", image: 'https://fr.web.img5.acsta.net/c_320_426/img/2e/29/2e292d36aa0d7fc0efb2e1d08578357d.jpg' },
+                                { title: "Ducobu et le fantôme de Saint-Potache", rating: 2.3, comment: "Comédie famille · Elie Semoun · Sortie le 07/10/2026", image: 'https://fr.web.img6.acsta.net/c_320_426/img/54/16/54167f9b523fff67b07b2e80f5f9dd71.jpg' },
+                                { title: "Une femme aujourd'hui", rating: 3.7, comment: "Comédie dramatique · Robert Guédiguian · Sortie le 21/10/2026", image: 'https://fr.web.img3.acsta.net/c_320_426/img/92/7f/927fd5891c142dc643f5851ba85d8393.jpg' }
+                            ];
+                            const actualitesIMDb = kinepolisFilms.map((film, index) => ({
+                                id: 'kinepolis-' + (index + 1),
+                                title: film.title,
+                                type: 'Actualité',
+                                category: 'film',
+                                rating: film.rating,
+                                comment: film.comment,
+                                image: film.image || kinepolisPosters[index % kinepolisPosters.length],
+                                date: '2026-11-03'
+                            }));
+
+                            // Animés de la saison Automne 2026 (source : API AniList, triés par popularité)
+                            // Les notes sont les scores AniList (/100) ramenés sur 5
+                            const anilistAnimes = [
+                                { title: "Cyberpunk: Edgerunners 2", rating: 4.2, comment: "Action, Sci-Fi · TRIGGER · 10 épisodes · Saison terminée", image: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx195539-4LdfmKIHzuxr.png' },
+                                { title: "Black Clover Season 2", rating: 4.4, comment: "Action, Fantasy · Studio Pierrot · En diffusion", image: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx195604-tSZcfKbVqSEG.jpg' },
+                                { title: "STEEL BALL RUN JoJo's Bizarre Adventure 2nd - 3rd STAGE", rating: 4.3, comment: "Action, Aventure · david production · 11 épisodes · En diffusion", image: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx210482-P1VNKbqdJ6Zj.jpg' },
+                                { title: "The Apothecary Diaries Season 3", rating: 4.3, comment: "Drama, Mystery · OLM · 12 épisodes · En diffusion", image: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx195516-MJpUZlOberqH.jpg' },
+                                { title: "Blue Box Season 2", rating: 4.1, comment: "Romance, Sport · Electric Circus · 12 épisodes · En diffusion", image: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx189123-0secXELIhkIW.jpg' },
+                                { title: "The Ramparts of Ice Season 2", rating: 4.1, comment: "Comédie, Romance · Studio KAI · En diffusion", image: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx213805-Nokui3uWlIlw.png' },
+                                { title: "Made in Abyss: Mezameru Shinpi", rating: 4.0, comment: "Aventure, Fantasy · Kinema Citrus · Film · Sorti", image: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx160275-cBOWJpcCGeMq.jpg' },
+                                { title: "Overgeared", rating: 3.8, comment: "Action, Fantasy · J.C.STAFF · 12 épisodes · En diffusion", image: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx212888-NhyvqPt5aIuJ.jpg' },
+                                { title: "Reincarnated as a Sword Season 2", rating: 3.8, comment: "Action, Fantasy · C2C · 12 épisodes · En diffusion", image: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx159042-GGFwlDskc5vR.png' },
+                                { title: "Firefly Wedding", rating: 3.8, comment: "Drama, Romance · david production · 12 épisodes · En diffusion", image: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx205909-DM0fAzNQulod.jpg' },
+                                { title: "Even the Student Council Has Its Holes!", rating: 3.7, comment: "Comédie, Slice of Life · Passione · 12 épisodes · En diffusion", image: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx191656-xFHtxM8SUTdU.png' },
+                                { title: "The Laid-Off Cheat-Granting Mage Enjoys a Second Lease on Life", rating: 3.7, comment: "Aventure, Fantasy · P.A.WORKS · En diffusion", image: 'https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/b207329-6VPeZIDfF4Sr.png' }
+                            ];
+                            const actualitesAnimes = anilistAnimes.map((anime, index) => ({
+                                id: 'anime-' + (index + 1),
+                                title: anime.title,
+                                type: 'Actualité',
+                                category: 'anime',
+                                rating: anime.rating,
+                                comment: anime.comment,
+                                image: anime.image,
+                                date: '2026-11-03'
+                            }));
+                            const actualitesProgrammation = [...actualitesIMDb, ...actualitesAnimes];
+                            actualitesRef.current = actualitesProgrammation;
+
+                            // Synchronisation une seule fois par chargement de page : sinon le remontage
+                            // de la vue annulerait aussitôt toute suppression faite par l'utilisateur
+                            if (!watchlistSynced) {
+                                watchlistSynced = true;
+                                setWatchlist(prev => {
+                                    const legacyIds = ['act-1', 'act-2', 'act-3'];
+                                    const isProg = id => /^(kinepolis|anime)-/.test(String(id));
+                                    const cleaned = prev.filter(item => !legacyIds.includes(item.id));
+                                    const known = new Set(cleaned.map(item => item.id));
+                                    // Ajoute ce qui manque (premier chargement, ou nouveaux animés) sans
+                                    // réinsérer ce que l'utilisateur a supprimé volontairement
+                                    const manquants = actualitesProgrammation.filter(a => !known.has(a.id));
+                                    // Met à jour les affiches obsolètes des entrées conservées
+                                    const fixed = cleaned.map(item => {
+                                        const ref = isProg(item.id) ? actualitesProgrammation.find(a => a.id === item.id) : null;
+                                        return ref && item.image !== ref.image ? { ...item, image: ref.image } : item;
+                                    });
+                                    const changed = fixed.some((item, index) => item !== cleaned[index]);
+                                    if (!manquants.length && !changed && cleaned.length === prev.length) return prev;
+                                    return [...manquants, ...fixed];
+                                });
+                            }
+
+                            // OMDb ne sert qu'aux suggestions : une panne réseau ne doit pas bloquer les actualités
+                            let data = null;
+                            try {
+                                const res = await fetch('https://www.omdbapi.com/?apikey=trilogy&s=2026&type=movie');
+                                data = await res.json();
+                            } catch (err) {
+                                console.warn("OMDb indisponible - programmation Kinepolis chargée seule.", err);
+                            }
+
+                            let popular = [];
+                            if (data && data.Search) {
+                                popular = data.Search.slice(0, 5).map(item => ({
+                                    id: 'omdb-' + item.imdbID,
+                                    title: item.Title,
+                                    type: 'Film',
+                                    rating: 4.5,
+                                    comment: `Sortie en ${item.Year} - Retrouvé sur IMDb`,
+                                    image: item.Poster !== 'N/A' ? item.Poster : ''
+                                }));
+                            }
+
+                            // Nettoie les anciennes actualités codées en dur (Avengers, Avatar, Batman)
+                            // puis synchronise la programmation Kinepolis Béziers dans la watchlist
+                            setApiResults(popular);
+                        } catch (err) {
+                            console.error("Erreur chargement OMDb:", err);
+                        } finally {
+                            setIsSearchingApi(false);
+                        }
+                    };
+                    fetchDefaultMovies();
+                }, []);
+
+                const handleSearchInternet = async (e) => {
+                    e.preventDefault();
+                    if (!searchQuery.trim()) return;
+                    setIsSearchingApi(true);
+                    setApiResults([]);
+
+                    try {
+                        const res = await fetch(`https://www.omdbapi.com/?apikey=trilogy&s=${encodeURIComponent(searchQuery)}`);
+                        const data = await res.json();
+
+                        if (data && data.Search) {
+                            const results = data.Search.slice(0, 8).map(item => ({
+                                id: 'omdb-' + item.imdbID,
+                                title: item.Title,
+                                type: item.Type === 'series' ? 'Série' : 'Film',
+                                rating: 4,
+                                comment: `Année : ${item.Year}`,
+                                image: item.Poster !== 'N/A' ? item.Poster : ''
+                            }));
+                            setApiResults(results);
+                        } else {
+                            setApiResults([]);
+                        }
+                    } catch (err) {
+                        console.error("Erreur recherche OMDb:", err);
+                    } finally {
+                        setIsSearchingApi(false);
+                    }
+                };
+
+                const selectSearchResult = (item) => {
+                    setTitle(item.title);
+                    setType(item.type);
+                    setRating(item.rating);
+                    setComment(item.comment);
+                    setImage(item.image);
+                };
+
+                const openAddModal = () => {
+                    setEditingId(null);
+                    setTitle('');
+                    setType('Film');
+                    setRating(5);
+                    setStatus('en-attente');
+                    setComment('');
+                    setImage('');
+                    setApiResults([]);
+                    setSearchQuery('');
+                    setShowModal(true);
+                };
+
+                const openEditModal = (item) => {
+                    setEditingId(item.id);
+                    setTitle(item.title);
+                    setType(item.type);
+                    setRating(item.rating);
+                    setComment(item.comment || '');
+                    setImage(item.image || '');
+                    setStatus(item.status || 'en-attente');
+                    setApiResults([]);
+                    setSearchQuery('');
+                    setShowModal(true);
+                };
+
+                const handleSaveMedia = (e) => {
+                    e.preventDefault();
+                    if (!title.trim()) return;
+                    const defaultImgs = {
+                        'Film': 'https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80',
+                        'Série': 'https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=800&q=80',
+                        'Anime': 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=800&q=80',
+                        'Actualité': 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=800&q=80'
+                    };
+                    const finalImage = image.trim() || defaultImgs[type] || defaultImgs['Film'];
+
+                    if (editingId) {
+                        // Mode édition
+                        setWatchlist(watchlist.map(w => w.id === editingId ? {
+                            ...w,
+                            title: title.trim(),
+                            type,
+                            rating: Number(rating),
+                            comment: comment.trim(),
+                            image: finalImage,
+                            status
+                        } : w));
+                    } else {
+                        // Mode ajout
+                        const newItem = {
+                            id: Date.now(),
+                            title: title.trim(),
+                            type,
+                            rating: Number(rating),
+                            comment: comment.trim(),
+                            image: finalImage,
+                            date: new Date().toLocaleDateString(),
+                            status
+                        };
+                        setWatchlist([newItem, ...watchlist]);
+                    }
+
+                    setTitle(''); setComment(''); setImage(''); setEditingId(null);
+                    setShowModal(false);
+                };
+
+                const handleDelete = (id) => {
+                    setWatchlist(watchlist.filter(w => w.id !== id));
+                };
+
+                // Une actualité ne se modifie pas : on la copie dans la liste personnelle en
+                // choisissant son statut (ou on met à jour le statut si elle y est déjà)
+                const openQuickAdd = (item) => {
+                    const existing = watchlist.find(w => w.type !== 'Actualité' && w.title === item.title);
+                    setQuickAdd({ item, existingId: existing ? existing.id : null });
+                };
+
+                const confirmQuickAdd = (statusChoisi) => {
+                    if (!quickAdd) return;
+                    const { item, existingId } = quickAdd;
+                    if (existingId) {
+                        setWatchlist(prev => prev.map(w => w.id === existingId ? { ...w, status: statusChoisi } : w));
+                    } else {
+                        setWatchlist(prev => [{
+                            id: 'copie-' + Date.now(),
+                            title: item.title,
+                            type: item.category === 'anime' ? 'Anime' : 'Film',
+                            rating: item.rating,
+                            comment: item.comment,
+                            image: item.image,
+                            date: new Date().toLocaleDateString('fr-FR'),
+                            status: statusChoisi
+                        }, ...prev]);
+                    }
+                    setQuickAdd(null);
+                };
+
+                // Même principe que « Rechercher Rally.tv » dans Événements : recharge la programmation
+                // embarquée (films supprimés restaurés, affiches resynchronisées) avec un état de chargement
+                const handleRefreshActualites = () => {
+                    if (isRefreshing) return;
+                    setIsRefreshing(true);
+                    setTimeout(() => {
+                        const actualites = actualitesRef.current;
+                        if (actualites.length) {
+                            setWatchlist(prev => {
+                                const isProg = item => /^(kinepolis|anime)-/.test(String(item.id));
+                                return [...actualites, ...prev.filter(item => !isProg(item))];
+                            });
+                        }
+                        lastRefreshLabel = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                        setLastRefresh(lastRefreshLabel);
+                        setIsRefreshing(false);
+                    }, 700);
+                };
+
+                const filtered = selectedType === 'all' 
+                    ? watchlist 
+                    : watchlist.filter(w => w.type.toLowerCase() === selectedType.toLowerCase());
+
+                // Filtre secondaire de l'onglet Actualités : films du Kinepolis ou animés de la saison
+                // (les anciennes entrées sans catégorie sont considérées comme des films)
+                const visible = selectedType === 'Actualité'
+                    ? filtered.filter(w => (w.category || 'film') === actCategory)
+                    : filtered;
+
+                return (
+                    <div className="fade-in flex flex-col gap-6">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div className="flex flex-wrap gap-2 bg-white/5 p-1.5 rounded-2xl border border-white/10">
+                                {[
+                                    { id: 'all', label: 'Tous' },
+                                    { id: 'Film', label: '🎬 Films' },
+                                    { id: 'Série', label: '📺 Séries' },
+                                    { id: 'Anime', label: '⚔️ Animes' },
+                                    { id: 'Actualité', label: '📰 Actualités' }
+                                ].map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setSelectedType(tab.id)}
+                                        className={`px-4 py-2 rounded-xl text-sm font-medium transition ${selectedType === tab.id ? 'bg-[#d8b4fe] text-black font-bold' : 'text-gray-400 hover:text-white'}`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex flex-col items-start sm:items-end gap-1">
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <button
+                                        onClick={handleRefreshActualites}
+                                        disabled={isRefreshing}
+                                        title="Recharger la programmation du Kinepolis Béziers"
+                                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-5 py-2.5 rounded-2xl transition flex items-center gap-2 shadow-lg hover:scale-105 text-sm disabled:opacity-50 disabled:hover:scale-100"
+                                    >
+                                        <svg className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+                                        {isRefreshing ? 'Actualisation...' : 'Actualiser les films'}
+                                    </button>
+                                    <button
+                                        onClick={openAddModal}
+                                        className="bg-[#d8b4fe] hover:bg-[#c084fc] text-black font-bold px-5 py-2.5 rounded-2xl transition flex items-center gap-2 shadow-lg hover:scale-105 text-sm"
+                                    >
+                                        <Icon name="plus" className="w-4 h-4" /> Ajouter une œuvre
+                                    </button>
+                                </div>
+                                {lastRefresh && <span className="text-[11px] text-gray-500">Dernière actualisation : {lastRefresh}</span>}
+                            </div>
+                        </div>
+
+                        {selectedType === 'Actualité' && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-gray-500 mr-1">Afficher :</span>
+                                {[
+                                    { id: 'film', label: '🎬 Films cinéma' },
+                                    { id: 'anime', label: '⚔️ Animés' }
+                                ].map(f => {
+                                    const total = watchlist.filter(w => w.type === 'Actualité' && (w.category || 'film') === f.id).length;
+                                    return (
+                                        <button
+                                            key={f.id}
+                                            onClick={() => changeActCategory(f.id)}
+                                            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition border ${actCategory === f.id ? 'bg-white/15 text-white border-white/25' : 'text-gray-400 border-white/10 hover:text-white hover:bg-white/5'}`}
+                                        >
+                                            {f.label} <span className="ml-1 text-[10px] opacity-70">({total})</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {showModal && (
+                            <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                                <div className="glass-card bg-[#1a1a1a] p-6 rounded-3xl w-full max-w-xl border border-purple-500/30 text-white max-h-[90vh] overflow-y-auto">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h3 className="text-xl font-bold flex items-center gap-2">
+                                            <span className="text-purple-400">🎬</span> {editingId ? "Modifier l'œuvre" : "Ajouter un Film / Série"}
+                                        </h3>
+                                        <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white"><Icon name="x" className="w-5 h-5" /></button>
+                                    </div>
+
+                                    {!editingId && (
+                                        <form onSubmit={handleSearchInternet} className="mb-6 bg-white/5 p-4 rounded-2xl border border-white/10">
+                                            <label className="text-xs text-purple-300 font-bold block mb-2">Rechercher sur la base de données OMDb</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={searchQuery}
+                                                    onChange={e => setSearchQuery(e.target.value)}
+                                                    placeholder="Ex: Batman, Matrix, Star Wars..."
+                                                    className="flex-1 bg-black/30 border border-white/10 p-2.5 rounded-xl outline-none focus:border-purple-400 text-sm"
+                                                />
+                                                <button type="submit" disabled={isSearchingApi} className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-2.5 rounded-xl text-sm transition flex items-center gap-1.5">
+                                                    <Icon name={isSearchingApi ? "loader-2" : "search"} className={`w-4 h-4 ${isSearchingApi ? "animate-spin" : ""}`} />
+                                                    Rechercher
+                                                </button>
+                                            </div>
+
+                                            <div className="mt-4 flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                                                {apiResults.map(res => (
+                                                    <div
+                                                        key={res.id}
+                                                        onClick={() => selectSearchResult(res)}
+                                                        className="flex items-center gap-3 p-2 bg-white/5 hover:bg-purple-500/20 rounded-xl cursor-pointer transition border border-white/5"
+                                                    >
+                                                        {res.image ? (
+                                                            <img src={res.image} alt={res.title} className="w-10 h-12 object-cover rounded-md" />
+                                                        ) : (
+                                                            <div className="w-10 h-12 bg-purple-900/50 rounded-md flex items-center justify-center text-xs font-bold text-purple-300">OMDb</div>
+                                                        )}
+                                                        <div className="flex-1 overflow-hidden">
+                                                            <div className="font-bold text-sm truncate">{res.title}</div>
+                                                            <div className="text-xs text-gray-400">{res.type} • {res.comment}</div>
+                                                        </div>
+                                                        <span className="text-xs bg-purple-500/30 text-purple-200 px-2.5 py-1 rounded-lg">Sélectionner</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </form>
+                                    )}
+
+                                    <form onSubmit={handleSaveMedia} className="flex flex-col gap-4">
+                                        <div>
+                                            <label className="text-xs text-gray-400 block mb-1">Titre *</label>
+                                            <input type="text" required value={title} onChange={e => setTitle(e.target.value)} placeholder="Nom du film ou de la série..." className="w-full bg-white/5 border border-white/10 p-3 rounded-xl outline-none focus:border-purple-400 text-sm" />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-xs text-gray-400 block mb-1">Type</label>
+                                                <select value={type} onChange={e => setType(e.target.value)} className="w-full bg-[#242424] border border-white/10 p-3 rounded-xl outline-none focus:border-purple-400 text-sm text-white">
+                                                    <option value="Film">🎬 Film</option>
+                                                    <option value="Série">📺 Série</option>
+                                                    <option value="Anime">⚔️ Anime</option>
+                                                    <option value="Actualité">📰 Actualité (IMDb Calendar)</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-gray-400 block mb-1">Note ({rating}/5)</label>
+                                                <input type="range" min="1" max="5" step="0.5" value={rating} onChange={e => setRating(e.target.value)} className="w-full accent-purple-400 mt-2" />
+                                            </div>
+                                        </div>
+                                        {type !== 'Actualité' && (
+                                            <div>
+                                                <label className="text-xs text-gray-400 block mb-1">Statut</label>
+                                                <select value={status} onChange={e => setStatus(e.target.value)} className="w-full bg-[#242424] border border-white/10 p-3 rounded-xl outline-none focus:border-purple-400 text-sm text-white">
+                                                    {WATCH_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                                                </select>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <label className="text-xs text-gray-400 block mb-1">Affiche (URL Image)</label>
+                                            <input type="url" value={image} onChange={e => setImage(e.target.value)} placeholder="https://..." className="w-full bg-white/5 border border-white/10 p-3 rounded-xl outline-none focus:border-purple-400 text-sm" />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-400 block mb-1">Avis / Commentaire</label>
+                                            <textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Votre avis personnel..." className="w-full bg-white/5 border border-white/10 p-3 rounded-xl outline-none focus:border-purple-400 text-sm min-h-[80px]"></textarea>
+                                        </div>
+                                        <div className="flex gap-3 mt-2">
+                                            <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 rounded-xl border border-white/10 text-gray-300 text-sm">Annuler</button>
+                                            <button type="submit" className="flex-1 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 font-bold text-white text-sm">
+                                                {editingId ? "Mettre à jour" : "Enregistrer"}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
+
+                        {quickAdd && (
+                            <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setQuickAdd(null)}>
+                                <div className="glass-card bg-[#1a1a1a] p-6 rounded-3xl w-full max-w-md border border-purple-500/30 text-white shadow-2xl" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div>
+                                            <h3 className="text-lg font-extrabold leading-tight">{quickAdd.item.title}</h3>
+                                            <p className="text-xs text-gray-400 mt-1">
+                                                {quickAdd.existingId ? 'Déjà dans votre liste — choisissez un nouveau statut' : 'Ajouter à votre liste : choisissez un statut'}
+                                            </p>
+                                        </div>
+                                        <button onClick={() => setQuickAdd(null)} className="text-gray-400 hover:text-white shrink-0"><Icon name="x" className="w-5 h-5" /></button>
+                                    </div>
+                                    <div className="flex flex-col gap-2 mt-5">
+                                        {WATCH_STATUSES.map(s => (
+                                            <button
+                                                key={s.id}
+                                                onClick={() => confirmQuickAdd(s.id)}
+                                                className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-extrabold text-white border border-white/10 hover:border-white/40 hover:scale-[1.01] transition ${s.cls}`}
+                                            >
+                                                <span>{s.label}</span>
+                                                <Icon name="arrow-right" className="w-4 h-4 opacity-70" />
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {visible.length === 0 ? (
+                            <div className="glass-card p-16 rounded-3xl text-center my-6 flex flex-col items-center justify-center gap-4 border border-dashed border-white/10">
+                                <Icon name="film" className="w-12 h-12 text-purple-400 opacity-50" />
+                                <h3 className="text-xl font-bold text-white">Aucune œuvre enregistrée</h3>
+                                <p className="text-gray-400 text-sm max-w-md">Ajoutez vos films et séries depuis l'API OMDb !</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {visible.map(item => (
+                                    <div
+                                        key={item.id}
+                                        onClick={item.type === 'Actualité' ? () => openQuickAdd(item) : undefined}
+                                        className={`glass-card rounded-3xl overflow-hidden flex flex-col justify-between hover:border-purple-500/40 transition duration-300 group shadow-lg ${item.type === 'Actualité' ? 'cursor-pointer hover:border-purple-400/60' : ''}`}
+                                    >
+                                        <div>
+                                            <div className="relative h-64 overflow-hidden bg-neutral-900">
+                                                <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" onError={(e) => { e.target.onerror = null; e.target.src='https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80'; }} />
+                                                {item.type === 'Actualité' && (
+                                                    <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition flex items-center justify-center px-4">
+                                                        <span className="px-4 py-2 rounded-full bg-purple-600 text-white text-xs font-extrabold flex items-center gap-2 shadow-lg text-center">
+                                                            <Icon name="plus" className="w-4 h-4 shrink-0" />
+                                                            {watchlist.some(w => w.type !== 'Actualité' && w.title === item.title) ? 'Déjà dans ma liste — changer le statut' : 'Ajouter à ma liste'}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <div className="absolute top-3 left-3 flex flex-wrap gap-2">
+                                                <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-black/60 text-white backdrop-blur-md">
+                                                        {item.type === 'Film' ? '🎬 Film' : item.type === 'Série' ? '📺 Série' : item.type === 'Anime' ? '⚔️ Anime' : '📰 Actualité'}
+                                                    </span>
+                                                    {item.status && watchStatus(item.status) && (
+                                                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold text-white backdrop-blur-md ${watchStatus(item.status).cls}`}>
+                                                            {watchStatus(item.status).label}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="absolute top-3 right-3 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-amber-400 font-bold text-xs flex items-center gap-1">
+                                                    ★ {item.rating}/5
+                                                </div>
+                                                {item.type !== 'Actualité' && (
+                                                    <div className="absolute bottom-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition">
+                                                        <button onClick={(e) => { e.stopPropagation(); openEditModal(item); }} className="w-8 h-8 rounded-full bg-black/70 hover:bg-purple-600 text-white flex items-center justify-center backdrop-blur-md transition" title="Modifier">
+                                                            <Icon name="edit-2" className="w-4 h-4" />
+                                                        </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }} className="w-8 h-8 rounded-full bg-black/70 hover:bg-red-600 text-white flex items-center justify-center backdrop-blur-md transition" title="Supprimer">
+                                                            <Icon name="trash-2" className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="p-6">
+                                                <h3 className="font-bold text-xl text-white mb-2">{item.title}</h3>
+                                                {item.comment && <p className="text-gray-300 text-xs mb-4 line-clamp-3 italic">"{item.comment}"</p>}
+                                                <div className="text-gray-500 text-[11px]">Ajouté le {item.date || 'Récemment'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            const BookmarksView = () => {
+                const [newName, setNewName] = useState("");
+                const [newUrl, setNewUrl] = useState("");
+                const addBookmark = (e) => {
+                    e.preventDefault();
+                    if(newName && newUrl) {
+                        let formattedUrl = newUrl.startsWith('http') ? newUrl : `https://${newUrl}`;
+                        setBookmarks([...bookmarks, { id: Date.now(), name: newName, url: formattedUrl }]);
+                        setNewName(""); setNewUrl("");
+                    }
+                };
+                const deleteBookmark = (id) => setBookmarks(bookmarks.filter(b => b.id !== id));
+                return (
+                    <div className="fade-in">
+                        <form onSubmit={addBookmark} className="glass-card p-6 rounded-3xl flex gap-4 mb-8 items-end max-w-2xl">
+                            <div className="flex-1">
+                                <label className="text-sm text-gray-400 mb-1 block">Nom du site</label>
+                                <input required type="text" value={newName} onChange={e=>setNewName(e.target.value)} className="w-full bg-white/5 border border-white/10 p-3 rounded-lg outline-none focus:border-[#b3c7f9]" placeholder="Ex: GitHub" />
+                            </div>
+                            <div className="flex-1">
+                                <label className="text-sm text-gray-400 mb-1 block">URL</label>
+                                <input required type="text" value={newUrl} onChange={e=>setNewUrl(e.target.value)} className="w-full bg-white/5 border border-white/10 p-3 rounded-lg outline-none focus:border-[#b3c7f9]" placeholder="Ex: github.com" />
+                            </div>
+                            <button type="submit" className="bg-[#b3c7f9] text-black font-bold px-6 py-3 rounded-lg hover:opacity-90 transition h-[46px]"><Icon name="plus" className="w-5 h-5" /></button>
+                        </form>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            {bookmarks.map(bm => (
+                                <a key={bm.id} href={bm.url} target="_blank" className="glass-card p-6 rounded-3xl hover:bg-white/10 transition group relative flex flex-col items-center justify-center gap-4 aspect-square">
+                                    <button onClick={(e) => {e.preventDefault(); deleteBookmark(bm.id);}} className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition p-2 hover:bg-red-500/20 text-red-400 rounded-full"><Icon name="trash-2" className="w-4 h-4" /></button>
+                                    <img src={`https://www.google.com/s2/favicons?domain=${bm.url}&sz=64`} alt={bm.name} className="w-12 h-12 rounded-xl" onError={(e) => {e.target.style.display='none'}} />
+                                    <span className="font-medium text-center">{bm.name}</span>
+                                </a>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            const SettingsView = () => (
+                <div className="fade-in max-w-2xl glass-card p-8 rounded-3xl">
+                    <h2 className="text-2xl font-bold mb-8">Paramètres</h2>
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center border-b border-white/10 pb-4">
+                            <div>
+                                <h4 className="font-medium">Thème Sombre</h4>
+                                <p className="text-sm text-gray-400">Le thème par défaut du Dashboard</p>
+                            </div>
+                            <div className="w-12 h-6 bg-[#a8e6cf] rounded-full relative cursor-pointer"><div className="w-4 h-4 bg-black rounded-full absolute right-1 top-1"></div></div>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-white/10 pb-4">
+                            <div>
+                                <h4 className="font-medium">Notifications</h4>
+                                <p className="text-sm text-gray-400">Activer les rappels de tâches</p>
+                            </div>
+                            <div className="w-12 h-6 bg-gray-600 rounded-full relative cursor-pointer"><div className="w-4 h-4 bg-white rounded-full absolute left-1 top-1"></div></div>
+                        </div>
+                        <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="w-full py-3 rounded-xl border border-red-500/50 text-red-400 hover:bg-red-500/10 transition mt-4">
+                            Réinitialiser toutes les données
+                        </button>
+                    </div>
+                </div>
+            );
+
+            const navItems = [
+                { id: 'home', label: 'Dashboard', icon: 'home' },
+                { id: 'tasks', label: 'Mes Tâches', icon: 'check-square' },
+                { id: 'calendar', label: 'Calendrier', icon: 'calendar' },
+                { id: 'notes', label: 'Notes', icon: 'edit-3' },
+                { id: 'events', label: 'Événements', icon: 'zap' },
+                { id: 'watchlist', label: 'Watchlist', icon: 'film' },
+                { id: 'bookmarks', label: 'Favoris', icon: 'bookmark' },
+                { id: 'settings', label: 'Paramètres', icon: 'settings' }
+            ];
+
+            return (
+                <div className="flex h-screen overflow-hidden text-gray-100">
+                    <div className="w-64 glass-card p-6 flex flex-col gap-8 hidden md:flex border-r border-gray-800 z-10">
+                        <div className="flex items-center gap-3 mt-4 justify-center">
+                            <div className="w-10 h-10 bg-white text-black rounded-xl flex items-center justify-center font-bold text-2xl">T°</div>
+                            <span className="font-bold text-xl tracking-wider">Dash.</span>
+                        </div>
+                        <nav className="flex flex-col gap-2 mt-4">
+                            {navItems.map(item => (
+                                <button 
+                                    key={item.id}
+                                    onClick={() => setActiveTab(item.id)}
+                                    className={`flex items-center gap-4 px-4 py-3 rounded-xl transition-all w-full text-left
+                                        ${activeTab === item.id 
+                                            ? 'bg-white/10 text-white font-bold scale-[1.02] border border-white/10' 
+                                            : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                                >
+                                    <Icon name={item.icon} className="w-5 h-5" /> {item.label}
+                                </button>
+                            ))}
+                        </nav>
+                    </div>
+
+                    <div className="flex-1 p-6 md:p-10 overflow-y-auto relative">
+                        <div className="flex justify-between items-center mb-10 sticky top-0 bg-[#1a1a1a]/90 backdrop-blur-md z-10 py-4 -mt-4 border-b border-white/5">
+                            <div className="text-3xl font-bold capitalize">
+                                {(navItems.find(i => i.id === activeTab) || {}).label}
+                            </div>
+                            <div className="flex items-center gap-6">
+                                <div className="hidden sm:flex glass-card px-4 py-2 rounded-full items-center gap-3">
+                                    <Icon name="search" className="w-4 h-4 text-gray-400" />
+                                    <input type="text" placeholder="Rechercher..." className="bg-transparent border-none outline-none text-sm w-32 md:w-48 placeholder-gray-500" />
+                                </div>
+                                <div className="w-10 h-10 rounded-full bg-gray-500 border border-gray-400 cursor-pointer overflow-hidden shadow-lg hover:scale-110 transition">
+                                   <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="avatar" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {activeTab === 'home' && <HomeView />}
+                        {activeTab === 'tasks' && <TasksView />}
+                        {activeTab === 'calendar' && <CalendarView />}
+                        {activeTab === 'notes' && <NotesView />}
+                        {activeTab === 'events' && <EventsView />}
+                        {activeTab === 'watchlist' && <WatchlistView />}
+                        {activeTab === 'bookmarks' && <BookmarksView />}
+                        {activeTab === 'settings' && <SettingsView />}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
