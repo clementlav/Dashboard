@@ -92,6 +92,7 @@
             { id: 'rally', label: '🏎️ Rallye WRC', cls: 'bg-red-600' },
             { id: 'motorsport', label: '🏁 Motorsport', cls: 'bg-orange-600' },
             { id: 'vélo', label: '🚲 Vélo', cls: 'bg-emerald-600' },
+            { id: 'glisse', label: '🌊 Glisse', cls: 'bg-cyan-600' },
             { id: 'skate', label: '🛹 Skateboard', cls: 'bg-fuchsia-600' },
             { id: 'snow', label: '🏂 Neige', cls: 'bg-sky-600' },
             { id: 'music', label: '🎵 Musique', cls: 'bg-pink-600' },
@@ -108,7 +109,7 @@
             {
                 id: "redbull-megaloop",
                 title: "Red Bull Megaloop",
-                category: "vélo",
+                category: "glisse",
                 source: "redbull",
                 start: "2026-08-29",
                 end: "2026-11-07T23:59:59",
@@ -132,7 +133,7 @@
             {
                 id: "redbull-nazare",
                 title: "TUDOR Nazaré Big Wave Challenge",
-                category: "vélo",
+                category: "glisse",
                 source: "redbull",
                 start: "2026-11-01",
                 end: "2027-03-31T23:59:59",
@@ -240,7 +241,7 @@
             {
                 id: "redbull-storm-chase",
                 title: "Red Bull Storm Chase",
-                category: "vélo",
+                category: "glisse",
                 source: "redbull",
                 start: "2026-01-01",
                 end: "2026-12-31T23:59:59",
@@ -636,7 +637,7 @@
 
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs text-gray-500 mr-1">Catégories :</span>
-                            {EVENT_CATEGORIES.filter(c => c.id === 'all' || categoryCounts[c.id]).map(c => (
+                            {EVENT_CATEGORIES.filter(c => c.id === 'all' || c.id === 'vélo' || categoryCounts[c.id]).map(c => (
                                 <button
                                     key={c.id}
                                     onClick={() => changeCategoryFilter(c.id)}
