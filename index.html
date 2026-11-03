@@ -1464,7 +1464,7 @@
                                 </div>
                             </div>
                             {mobileMenuOpen && (
-                                <>
+                                <React.Fragment>
                                     <div
                                         className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-20"
                                         onClick={() => setMobileMenuOpen(false)}
@@ -1480,7 +1480,7 @@
                                             </button>
                                         ))}
                                     </nav>
-                                </>
+                                </React.Fragment>
                             )}
                         </div>
 
