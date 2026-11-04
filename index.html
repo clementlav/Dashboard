@@ -309,37 +309,18 @@
             return <div ref={containerRef} className="flex items-center justify-end" />;
         };
 
-        /* Animatheque : le site complet est affiché tel quel, depuis son propre fichier. */
-        const AnimaFrame = () => {
-            const [missing, setMissing] = useState(false);
-            useEffect(() => {
-                let cancelled = false;
-                fetch('animatheque.html', { method: 'HEAD', cache: 'no-store' })
-                    .then(res => { if (!cancelled) setMissing(!res.ok); })
-                    .catch(() => { if (!cancelled) setMissing(true); });
-                return () => { cancelled = true; };
-            }, []);
-            if (missing) {
-                return (
-                    <div className="fade-in glass-card rounded-3xl p-10 text-center flex flex-col items-center gap-3">
-                        <Icon name="library" className="w-8 h-8 text-[#c98f5a]" />
-                        <h2 className="text-xl font-extrabold">Le site Animathèque n'est pas encore dans le projet</h2>
-                        <p className="text-sm text-gray-400 max-w-md">
-                            Ajoute <span className="text-gray-200 font-semibold">animatheque.html</span> à la racine du projet,
-                            à côté de <span className="text-gray-200 font-semibold">index.html</span> : il s'affichera ici en entier, sans aucune modification.
-                        </p>
-                    </div>
-                );
-            }
-            return (
-                <iframe
-                    src="animatheque.html"
-                    title="Animathèque"
-                    className="w-full rounded-2xl border border-white/10 bg-[#0a0a0c]"
-                    style={{ height: 'calc(100vh - 9.5rem)', minHeight: 520 }}
-                />
-            );
-        };
+        /* Animatheque : le site complet est affiché tel quel, depuis son adresse publique. */
+        const AnimaFrame = () => (
+            <iframe
+                src="https://mathislisteanimes.netlify.app/"
+                title="Animathèque"
+                className="w-full rounded-2xl border border-white/10 bg-[#0a0a0c]"
+                style={{ height: 'calc(100vh - 9.5rem)', minHeight: 520 }}
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                allow="fullscreen; clipboard-write"
+            />
+        );
 
         const App = () => {
             const [activeTab, setActiveTab] = useState('home');
