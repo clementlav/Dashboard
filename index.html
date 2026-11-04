@@ -309,6 +309,76 @@
             return <div ref={containerRef} className="flex items-center justify-end" />;
         };
 
+        // Connexion sans serveur : le dashboard est un fichier statique. Sans API, le compte est
+        // gardé dans le navigateur et les données restent sur cet appareil.
+        const SignInDialog = ({ open, onClose, onSubmit, googleClientId, onGoogleCredential, authError }) => {
+            const [name, setName] = useState('');
+            const [email, setEmail] = useState('');
+            useEffect(() => {
+                if (!open) { setName(''); setEmail(''); }
+            }, [open]);
+            if (!open) return null;
+            const valid = name.trim().length > 0;
+            const submit = (event) => {
+                event.preventDefault();
+                if (!valid) return;
+                onSubmit(name, email);
+            };
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+                    <form
+                        onSubmit={submit}
+                        onClick={(event) => event.stopPropagation()}
+                        className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#141418] p-6 flex flex-col gap-4 shadow-2xl"
+                    >
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-bold">Se connecter</h3>
+                            <button type="button" onClick={onClose} aria-label="Fermer" className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-gray-400 flex items-center justify-center hover:bg-white/10 transition">
+                                <Icon name="x" className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-400">
+                            Ton espace reste sur cet appareil : tâches, notes, événements et watchlist sont enregistrés dans ce navigateur.
+                        </p>
+                        <label className="flex flex-col gap-1 text-xs text-gray-400">
+                            Nom
+                            <input
+                                value={name}
+                                onChange={(event) => setName(event.target.value)}
+                                placeholder="Clement"
+                                autoFocus
+                                className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-gray-100 outline-none focus:border-[#c98f5a]"
+                            />
+                        </label>
+                        <label className="flex flex-col gap-1 text-xs text-gray-400">
+                            Email (facultatif)
+                            <input
+                                value={email}
+                                onChange={(event) => setEmail(event.target.value)}
+                                type="email"
+                                placeholder="clement@exemple.fr"
+                                className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-gray-100 outline-none focus:border-[#c98f5a]"
+                            />
+                        </label>
+                        <button
+                            type="submit"
+                            disabled={!valid}
+                            className={`py-2.5 rounded-xl text-sm font-bold transition ${valid ? 'bg-[#c98f5a] text-[#0a0a0c] hover:brightness-110' : 'bg-white/10 text-gray-500 cursor-not-allowed'}`}
+                        >
+                            Entrer dans le dashboard
+                        </button>
+                        {googleClientId && (
+                            <div className="flex flex-col gap-2 border-t border-white/10 pt-4">
+                                <span className="text-[10px] uppercase tracking-wide text-gray-500">ou avec Google</span>
+                                <GoogleSignIn clientId={googleClientId} onCredential={onGoogleCredential} />
+                            </div>
+                        )}
+                        {authError && <p className="text-xs text-red-400">{authError}</p>}
+                    </form>
+                </div>
+            );
+        };
+
         /* Animatheque : le site complet est affiché tel quel, depuis son adresse publique.
            anilist.co interdit l'affichage en cadre (x-frame-options: SAMEORIGIN) : la connexion
            AniList ne peut donc pas aboutir dans l'iframe, elle s'ouvre en plein écran. */
@@ -403,6 +473,11 @@
             const [authReady, setAuthReady] = useState(false);
             const [authError, setAuthError] = useState('');
             const [syncState, setSyncState] = useState('idle');
+            // Compte local (sans API) : gardé dans le navigateur, il ouvre l'espace du dashboard.
+            const [localAccount, setLocalAccount] = useState(() => {
+                try { return JSON.parse(localStorage.getItem('myAccount_v1') || 'null'); } catch (error) { return null; }
+            });
+            const [loginOpen, setLoginOpen] = useState(false);
 
             useEffect(() => {
                 let cancelled = false;
@@ -1538,11 +1613,13 @@
                     <div className="space-y-6">
                         <div className="flex flex-col gap-3 border-b border-white/10 pb-6">
                             <div>
-                                <h4 className="font-medium">Compte Google</h4>
+                                <h4 className="font-medium">Compte</h4>
                                 <p className="text-sm text-gray-400">
                                     {user
                                         ? `Connecté avec ${user.email} : vos notes, événements et watchlist sont enregistrés sur ce compte.`
-                                        : 'Connectez-vous avec Google pour retrouver vos notes, événements et watchlist sur tous vos appareils.'}
+                                        : localAccount
+                                            ? `Connecté en tant que ${localAccount.name || localAccount.email} sur cet appareil : tes données y sont enregistrées.`
+                                            : 'Connecte-toi pour retrouver ton dashboard : en mode local, tout est enregistré dans ce navigateur.'}
                                 </p>
                             </div>
                             {user && (
@@ -1551,11 +1628,24 @@
                                     <button onClick={signOut} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold hover:bg-white/10 transition">Se déconnecter</button>
                                 </div>
                             )}
-                            {!user && googleClientId && (
-                                <GoogleSignIn clientId={googleClientId} onCredential={handleGoogleCredential} />
+                            {!user && localAccount && (
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <span className="text-xs text-gray-500">
+                                        Compte local{localAccount.email ? ` · ${localAccount.email}` : ''}
+                                    </span>
+                                    <button onClick={signOut} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold hover:bg-white/10 transition">Se déconnecter</button>
+                                </div>
+                            )}
+                            {!user && !localAccount && (
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <button onClick={() => setLoginOpen(true)} className="px-4 py-2 rounded-xl bg-[#c98f5a] text-[#0a0a0c] text-sm font-bold hover:brightness-110 transition">Se connecter</button>
+                                    {googleClientId && (
+                                        <GoogleSignIn clientId={googleClientId} onCredential={handleGoogleCredential} />
+                                    )}
+                                </div>
                             )}
                             {!user && authReady && !googleClientId && (
-                                <p className="text-xs text-amber-300/80">Connexion Google non configurée : renseignez GOOGLE_CLIENT_ID et SESSION_SECRET dans les secrets du site.</p>
+                                <p className="text-xs text-gray-500">La synchronisation multi-appareils s'active en branchant l'API du site avec GOOGLE_CLIENT_ID et SESSION_SECRET.</p>
                             )}
                             {authError && <p className="text-xs text-red-400">{authError}</p>}
                         </div>
@@ -1601,7 +1691,20 @@
                 }
             };
 
+            const signInLocal = (name, email) => {
+                const account = { name: name.trim(), email: (email || '').trim(), picture: null, local: true };
+                setLocalAccount(account);
+                try { localStorage.setItem('myAccount_v1', JSON.stringify(account)); } catch (error) { /* stockage indisponible */ }
+                setLoginOpen(false);
+            };
+
+            const signOutLocal = () => {
+                setLocalAccount(null);
+                try { localStorage.removeItem('myAccount_v1'); } catch (error) { /* stockage indisponible */ }
+            };
+
             const signOut = async () => {
+                signOutLocal();
                 try {
                     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
                 } catch (error) {
@@ -1681,8 +1784,29 @@
                                         </button>
                                     </div>
                                 )}
-                                {authReady && !user && (
-                                    <GoogleSignIn clientId={googleClientId} onCredential={handleGoogleCredential} />
+                                {authReady && !user && localAccount && (
+                                    <div className="flex items-center gap-2 sm:gap-3">
+                                        <div className="hidden sm:block text-right leading-tight">
+                                            <div className="text-xs font-semibold truncate max-w-[140px]">{localAccount.name || localAccount.email}</div>
+                                            <div className="text-[10px] text-gray-500">Enregistré sur cet appareil</div>
+                                        </div>
+                                        <div className="w-9 h-9 rounded-full bg-[#c98f5a] text-[#0a0a0c] font-bold flex items-center justify-center shrink-0 uppercase">
+                                            {(localAccount.name || localAccount.email || '?').charAt(0)}
+                                        </div>
+                                        <button onClick={signOut} title="Se déconnecter" className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 text-gray-300 flex items-center justify-center hover:bg-white/10 transition">
+                                            <Icon name="log-out" className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                )}
+                                {authReady && !user && !localAccount && (
+                                    <div className="flex items-center gap-3">
+                                        <GoogleSignIn clientId={googleClientId} onCredential={handleGoogleCredential} />
+                                        {!googleClientId && (
+                                            <button onClick={() => setLoginOpen(true)} className="px-4 py-2 rounded-xl bg-[#c98f5a] text-[#0a0a0c] text-sm font-bold hover:brightness-110 transition inline-flex items-center gap-2">
+                                                <Icon name="user" className="w-4 h-4" /> Se connecter
+                                            </button>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                             {mobileMenuOpen && (
@@ -1716,6 +1840,14 @@
                         {activeTab === 'bookmarks' && <BookmarksView />}
                         {activeTab === 'settings' && <SettingsView />}
                     </div>
+                    <SignInDialog
+                        open={loginOpen}
+                        onClose={() => setLoginOpen(false)}
+                        onSubmit={signInLocal}
+                        googleClientId={googleClientId}
+                        onGoogleCredential={handleGoogleCredential}
+                        authError={authError}
+                    />
                 </div>
             );
         };
