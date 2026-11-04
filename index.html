@@ -12,20 +12,20 @@
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
     <style>
         body {
-            background-color: #241a15;
-            color: #f5ece5;
+            background-color: #0a0a0c;
+            color: #f5f5f7;
             font-family: 'Inter', sans-serif;
-            background-image: radial-gradient(#4a352a 1px, transparent 1px);
+            background-image: radial-gradient(#26262b 1px, transparent 1px);
             background-size: 20px 20px;
         }
         .glass-card {
-            background: rgba(48, 33, 25, 0.75);
+            background: rgba(18, 18, 22, 0.78);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(226, 176, 138, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.08);
         }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #7a5a44; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 10px; }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -34,15 +34,15 @@
 
         /* FullCalendar Dark Theme */
         .fc {
-            --fc-border-color: rgba(226, 176, 138, 0.14);
+            --fc-border-color: rgba(255, 255, 255, 0.1);
             --fc-page-bg-color: transparent;
-            --fc-neutral-bg-color: rgba(226, 176, 138, 0.07);
-            --fc-list-event-hover-bg-color: rgba(226, 176, 138, 0.12);
+            --fc-neutral-bg-color: rgba(255, 255, 255, 0.05);
+            --fc-list-event-hover-bg-color: rgba(255, 255, 255, 0.1);
         }
         .fc .fc-toolbar-title { color: #ffffff; font-size: 1.25rem; font-weight: bold; }
-        .fc .fc-button-primary { background-color: rgba(122, 90, 68, 0.45); border-color: rgba(226, 176, 138, 0.25); color: #fff; border-radius: 0.75rem; text-transform: capitalize; }
-        .fc .fc-button-primary:hover { background-color: rgba(150, 108, 78, 0.6); border-color: rgba(226, 176, 138, 0.35); }
-        .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: #c98f5a; border-color: #c98f5a; color: #241a15; font-weight: bold; }
+        .fc .fc-button-primary { background-color: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.16); color: #fff; border-radius: 0.75rem; text-transform: capitalize; }
+        .fc .fc-button-primary:hover { background-color: rgba(255, 255, 255, 0.16); border-color: rgba(255, 255, 255, 0.26); }
+        .fc .fc-button-primary:not(:disabled).fc-button-active { background-color: #e4e4e7; border-color: #e4e4e7; color: #0a0a0c; font-weight: bold; }
         .fc .fc-daygrid-day-number { color: #ccc; text-decoration: none; font-size: 0.85rem; }
         .fc .fc-col-header-cell-cushion { color: #888; text-decoration: none; font-size: 0.85rem; font-weight: 600; }
     </style>
@@ -309,6 +309,38 @@
             return <div ref={containerRef} className="flex items-center justify-end" />;
         };
 
+        /* Animatheque : le site complet est affiché tel quel, depuis son propre fichier. */
+        const AnimaFrame = () => {
+            const [missing, setMissing] = useState(false);
+            useEffect(() => {
+                let cancelled = false;
+                fetch('animatheque.html', { method: 'HEAD', cache: 'no-store' })
+                    .then(res => { if (!cancelled) setMissing(!res.ok); })
+                    .catch(() => { if (!cancelled) setMissing(true); });
+                return () => { cancelled = true; };
+            }, []);
+            if (missing) {
+                return (
+                    <div className="fade-in glass-card rounded-3xl p-10 text-center flex flex-col items-center gap-3">
+                        <Icon name="library" className="w-8 h-8 text-[#c98f5a]" />
+                        <h2 className="text-xl font-extrabold">Le site Animathèque n'est pas encore dans le projet</h2>
+                        <p className="text-sm text-gray-400 max-w-md">
+                            Ajoute <span className="text-gray-200 font-semibold">animatheque.html</span> à la racine du projet,
+                            à côté de <span className="text-gray-200 font-semibold">index.html</span> : il s'affichera ici en entier, sans aucune modification.
+                        </p>
+                    </div>
+                );
+            }
+            return (
+                <iframe
+                    src="animatheque.html"
+                    title="Animathèque"
+                    className="w-full rounded-2xl border border-white/10 bg-[#0a0a0c]"
+                    style={{ height: 'calc(100vh - 9.5rem)', minHeight: 520 }}
+                />
+            );
+        };
+
         const App = () => {
             const [activeTab, setActiveTab] = useState('home');
             const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -564,7 +596,7 @@
 
                         {showModal && (
                             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                                <div className="glass-card bg-[#2a1e17] p-6 rounded-3xl w-full max-w-md border border-white/10 text-white">
+                                <div className="glass-card bg-[#141418] p-6 rounded-3xl w-full max-w-md border border-white/10 text-white">
                                     <h3 className="text-xl font-bold mb-4">Nouvel Événement</h3>
                                     <form onSubmit={handleAddEvent} className="flex flex-col gap-4">
                                         <div>
@@ -713,7 +745,7 @@
 
                 return (
                     <div className="fade-in flex flex-col gap-6">
-                        <div className="glass-card bg-gradient-to-r from-[#2b1d16] via-[#3a2820] to-[#5a3324] p-8 rounded-3xl border border-[#c98f5a]/25 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-xl">
+                        <div className="glass-card bg-gradient-to-r from-[#141418] via-[#1a1a1f] to-[#26262c] p-8 rounded-3xl border border-white/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-xl">
                             <div>
                                 <h2 className="text-3xl font-extrabold text-white">Événements Red Bull</h2>
                             </div>
@@ -721,7 +753,7 @@
                                 
                                 <button
                                     onClick={() => setShowModal(true)}
-                                    className="bg-[#8b5e3c] hover:bg-[#a06f4a] text-white font-extrabold px-4 sm:px-5 py-3 rounded-2xl transition flex items-center justify-center gap-2 shadow-xl hover:scale-105 text-xs sm:text-sm flex-1 md:flex-none whitespace-nowrap"
+                                    className="bg-white/10 hover:bg-white/20 text-white font-extrabold px-4 sm:px-5 py-3 rounded-2xl transition flex items-center justify-center gap-2 shadow-xl hover:scale-105 text-xs sm:text-sm flex-1 md:flex-none whitespace-nowrap"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                                     + Ajouter un événement
@@ -730,7 +762,7 @@
                                     onClick={loadRedbullTV}
                                     disabled={isSyncingRedbull}
                                     title="Charger les événements Red Bull à venir en France, sans rediffusions"
-                                    className="bg-[#6b4f3a] hover:bg-[#86613f] text-white font-extrabold px-4 sm:px-5 py-3 rounded-2xl transition flex items-center justify-center gap-2 shadow-xl hover:scale-105 text-xs sm:text-sm flex-1 md:flex-none whitespace-nowrap disabled:opacity-50 disabled:hover:scale-100"
+                                    className="bg-white/10 hover:bg-white/20 text-white font-extrabold px-4 sm:px-5 py-3 rounded-2xl transition flex items-center justify-center gap-2 shadow-xl hover:scale-105 text-xs sm:text-sm flex-1 md:flex-none whitespace-nowrap disabled:opacity-50 disabled:hover:scale-100"
                                 >
                                     <svg className={`w-4 h-4 ${isSyncingRedbull ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
                                     {isSyncingRedbull ? 'Synchronisation...' : 'Actualiser Red Bull'}
@@ -751,7 +783,7 @@
                                 <button
                                     key={c.id}
                                     onClick={() => changeCategoryFilter(c.id)}
-                                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition border ${categoryFilter === c.id ? 'bg-[#c98f5a]/20 text-white border-[#c98f5a]/40' : 'text-[#b39a88] border-[#c98f5a]/15 hover:text-white hover:bg-[#c98f5a]/10'}`}
+                                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition border ${categoryFilter === c.id ? 'bg-white/15 text-white border-white/25' : 'text-gray-400 border-white/10 hover:text-white hover:bg-[#c98f5a]/10'}`}
                                 >
                                     {c.label}{c.id !== 'all' && <span className="ml-1 text-[10px] opacity-70">({categoryCounts[c.id]})</span>}
                                 </button>
@@ -760,7 +792,7 @@
 
                         {showModal && (
                             <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                                <div className="glass-card bg-[#2a1e17] p-6 rounded-3xl w-full max-w-lg border border-emerald-500/30 text-white shadow-2xl">
+                                <div className="glass-card bg-[#141418] p-6 rounded-3xl w-full max-w-lg border border-emerald-500/30 text-white shadow-2xl">
                                     <div className="flex justify-between items-center mb-6">
                                         <h3 className="text-xl font-bold flex items-center gap-2">
                                             <span className="text-emerald-400">🚲</span> Ajouter un événement
@@ -1244,7 +1276,7 @@
 
                         {showModal && (
                             <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                                <div className="glass-card bg-[#2a1e17] p-6 rounded-3xl w-full max-w-xl border border-purple-500/30 text-white max-h-[90vh] overflow-y-auto">
+                                <div className="glass-card bg-[#141418] p-6 rounded-3xl w-full max-w-xl border border-purple-500/30 text-white max-h-[90vh] overflow-y-auto">
                                     <div className="flex justify-between items-center mb-6">
                                         <h3 className="text-xl font-bold flex items-center gap-2">
                                             <span className="text-purple-400">🎬</span> {editingId ? "Modifier l'œuvre" : "Ajouter un Film / Série"}
@@ -1337,7 +1369,7 @@
 
                         {quickAdd && (
                             <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setQuickAdd(null)}>
-                                <div className="glass-card bg-[#2a1e17] p-6 rounded-3xl w-full max-w-md border border-purple-500/30 text-white shadow-2xl" onClick={e => e.stopPropagation()}>
+                                <div className="glass-card bg-[#141418] p-6 rounded-3xl w-full max-w-md border border-purple-500/30 text-white shadow-2xl" onClick={e => e.stopPropagation()}>
                                     <div className="flex justify-between items-start gap-4">
                                         <div>
                                             <h3 className="text-lg font-extrabold leading-tight">{quickAdd.item.title}</h3>
@@ -1493,10 +1525,10 @@
                 <div className="fade-in max-w-2xl glass-card p-8 rounded-3xl">
                     <h2 className="text-2xl font-bold mb-8">Paramètres</h2>
                     <div className="space-y-6">
-                        <div className="flex flex-col gap-3 border-b border-[#c98f5a]/20 pb-6">
+                        <div className="flex flex-col gap-3 border-b border-white/10 pb-6">
                             <div>
                                 <h4 className="font-medium">Compte Google</h4>
-                                <p className="text-sm text-[#b39a88]">
+                                <p className="text-sm text-gray-400">
                                     {user
                                         ? `Connecté avec ${user.email} : vos notes, événements et watchlist sont enregistrés sur ce compte.`
                                         : 'Connectez-vous avec Google pour retrouver vos notes, événements et watchlist sur tous vos appareils.'}
@@ -1504,8 +1536,8 @@
                             </div>
                             {user && (
                                 <div className="flex flex-wrap items-center gap-3">
-                                    <span className="text-xs text-[#a08a78]">{syncState === 'saving' ? 'Enregistrement…' : syncState === 'error' ? 'Enregistrement impossible' : 'Tout est synchronisé'}</span>
-                                    <button onClick={signOut} className="px-4 py-2 rounded-xl bg-[#3a2820] border border-[#c98f5a]/25 text-sm font-semibold hover:bg-[#4a352a] transition">Se déconnecter</button>
+                                    <span className="text-xs text-gray-500">{syncState === 'saving' ? 'Enregistrement…' : syncState === 'error' ? 'Enregistrement impossible' : 'Tout est synchronisé'}</span>
+                                    <button onClick={signOut} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-semibold hover:bg-white/10 transition">Se déconnecter</button>
                                 </div>
                             )}
                             {!user && googleClientId && (
@@ -1573,6 +1605,7 @@
                 { id: 'calendar', label: 'Calendrier', icon: 'calendar' },
                 { id: 'notes', label: 'Notes', icon: 'edit-3' },
                 { id: 'events', label: 'Événements', icon: 'zap' },
+                { id: 'anima', label: 'Animatheque', icon: 'library' },
                 { id: 'watchlist', label: 'Watchlist', icon: 'film' },
                 { id: 'bookmarks', label: 'Favoris', icon: 'bookmark' },
                 { id: 'settings', label: 'Paramètres', icon: 'settings' }
@@ -1580,9 +1613,9 @@
 
             return (
                 <div className="flex h-screen overflow-hidden text-gray-100">
-                    <div className="w-64 glass-card p-6 flex flex-col gap-8 hidden md:flex border-r border-[#4a352a] z-10">
+                    <div className="w-64 glass-card p-6 flex flex-col gap-8 hidden md:flex border-r border-white/10 z-10">
                         <div className="flex items-center gap-3 mt-4 justify-center">
-                            <div className="w-10 h-10 bg-[#d9a066] text-[#241a15] rounded-xl flex items-center justify-center font-bold text-2xl">T°</div>
+                            <div className="w-10 h-10 bg-[#d9a066] text-[#0a0a0c] rounded-xl flex items-center justify-center font-bold text-2xl">T°</div>
                             <span className="font-bold text-xl tracking-wider">Dash.</span>
                         </div>
                         <nav className="flex flex-col gap-2 mt-4">
@@ -1593,16 +1626,16 @@
                                     className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all w-full text-left
                                         ${activeTab === item.id 
                                             ? 'bg-[#c98f5a]/15 text-white font-bold scale-[1.02] border border-[#c98f5a]/30' 
-                                            : 'text-[#a08a78] hover:text-white hover:bg-[#c98f5a]/10'}`}
+                                            : 'text-gray-500 hover:text-white hover:bg-[#c98f5a]/10'}`}
                                 >
-                                    <Icon name={item.icon} className="w-4 h-4" /> {item.label}
+                                    <span className="text-[#c98f5a] flex-none"><Icon name={item.icon} className="w-4 h-4" /></span> {item.label}
                                 </button>
                             ))}
                         </nav>
                     </div>
 
                     <div className="flex-1 p-6 md:p-10 overflow-y-auto relative">
-                        <div className="flex justify-between items-center mb-6 md:mb-10 sticky top-0 bg-[#241a15]/90 backdrop-blur-md z-10 py-4 -mt-4 border-b border-white/5 relative">
+                        <div className="flex justify-between items-center mb-6 md:mb-10 sticky top-0 bg-[#0a0a0c]/90 backdrop-blur-md z-10 py-4 -mt-4 border-b border-white/5 relative">
                             <div className="flex items-center gap-3 min-w-0">
                                 <button
                                     onClick={() => setMobileMenuOpen(v => !v)}
@@ -1625,14 +1658,14 @@
                                     <div className="flex items-center gap-2 sm:gap-3">
                                         <div className="hidden sm:block text-right leading-tight">
                                             <div className="text-xs font-semibold truncate max-w-[140px]">{user.name || user.email}</div>
-                                            <div className="text-[10px] text-[#a08a78]">{syncState === 'saving' ? 'Enregistrement…' : syncState === 'error' ? 'Synchro impossible' : 'Synchronisé'}</div>
+                                            <div className="text-[10px] text-gray-500">{syncState === 'saving' ? 'Enregistrement…' : syncState === 'error' ? 'Synchro impossible' : 'Synchronisé'}</div>
                                         </div>
-                                        <div className="w-9 h-9 rounded-full bg-[#8b5e3c] border border-[#c98f5a]/50 overflow-hidden shrink-0">
+                                        <div className="w-9 h-9 rounded-full bg-white/10 border border-white/20 overflow-hidden shrink-0">
                                             {user.picture
                                                 ? <img src={user.picture} alt="" />
                                                 : <div className="w-full h-full flex items-center justify-center"><Icon name="user" className="w-4 h-4" /></div>}
                                         </div>
-                                        <button onClick={signOut} title="Se déconnecter" className="w-9 h-9 rounded-xl bg-[#3a2820] border border-[#c98f5a]/25 text-[#e8d5c4] flex items-center justify-center hover:bg-[#4a352a] transition">
+                                        <button onClick={signOut} title="Se déconnecter" className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 text-gray-300 flex items-center justify-center hover:bg-white/10 transition">
                                             <Icon name="log-out" className="w-4 h-4" />
                                         </button>
                                     </div>
@@ -1647,14 +1680,14 @@
                                         className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-20"
                                         onClick={() => setMobileMenuOpen(false)}
                                     ></div>
-                                    <nav className="md:hidden absolute left-0 right-0 top-full mt-2 z-30 rounded-2xl border border-[#c98f5a]/15 bg-[#2a1e17] p-2 shadow-2xl max-h-[65vh] overflow-y-auto">
+                                    <nav className="md:hidden absolute left-0 right-0 top-full mt-2 z-30 rounded-2xl border border-white/10 bg-[#141418] p-2 shadow-2xl max-h-[65vh] overflow-y-auto">
                                         {navItems.map(item => (
                                             <button
                                                 key={item.id}
                                                 onClick={() => { setActiveTab(item.id); setMobileMenuOpen(false); }}
                                                 className={`flex items-center gap-3 w-full text-left px-4 py-3 rounded-xl transition ${activeTab === item.id ? 'bg-white/10 text-white font-bold border border-white/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                                             >
-                                                <Icon name={item.icon} className="w-4 h-4" /> {item.label}
+                                                <span className="text-[#c98f5a] flex-none"><Icon name={item.icon} className="w-4 h-4" /></span> {item.label}
                                             </button>
                                         ))}
                                     </nav>
@@ -1667,6 +1700,7 @@
                         {activeTab === 'calendar' && <CalendarView />}
                         {activeTab === 'notes' && <NotesView />}
                         {activeTab === 'events' && <EventsView />}
+                        {activeTab === 'anima' && <AnimaFrame />}
                         {activeTab === 'watchlist' && <WatchlistView />}
                         {activeTab === 'bookmarks' && <BookmarksView />}
                         {activeTab === 'settings' && <SettingsView />}
