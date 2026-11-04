@@ -309,18 +309,48 @@
             return <div ref={containerRef} className="flex items-center justify-end" />;
         };
 
-        /* Animatheque : le site complet est affiché tel quel, depuis son adresse publique. */
-        const AnimaFrame = () => (
-            <iframe
-                src="https://mathislisteanimes.netlify.app/"
-                title="Animathèque"
-                className="w-full rounded-2xl border border-white/10 bg-[#0a0a0c]"
-                style={{ height: 'calc(100vh - 9.5rem)', minHeight: 520 }}
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                allow="fullscreen; clipboard-write"
-            />
-        );
+        /* Animatheque : le site complet est affiché tel quel, depuis son adresse publique.
+           anilist.co interdit l'affichage en cadre (x-frame-options: SAMEORIGIN) : la connexion
+           AniList ne peut donc pas aboutir dans l'iframe, elle s'ouvre en plein écran. */
+        const ANIMA_URL = 'https://mathislisteanimes.netlify.app/';
+
+        const AnimaFrame = () => {
+            const [frameId, setFrameId] = useState(0);
+            return (
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                        <span className="text-[#c98f5a]"><Icon name="library" className="w-4 h-4" /></span>
+                        <p className="text-xs text-gray-400 flex-1 min-w-[220px]">
+                            AniList refuse de s'afficher dans un cadre : pour te connecter, ouvre l'Animathèque en plein écran.
+                        </p>
+                        <a
+                            href={ANIMA_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 rounded-xl bg-[#c98f5a] text-[#0a0a0c] text-xs font-bold hover:brightness-110 transition inline-flex items-center gap-2"
+                        >
+                            <Icon name="external-link" className="w-4 h-4" /> Ouvrir en plein écran
+                        </a>
+                        <button
+                            onClick={() => setFrameId(id => id + 1)}
+                            className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-gray-300 hover:bg-white/10 transition inline-flex items-center gap-2"
+                        >
+                            <Icon name="refresh-cw" className="w-4 h-4" /> Recharger
+                        </button>
+                    </div>
+                    <iframe
+                        key={frameId}
+                        src={ANIMA_URL}
+                        title="Animathèque"
+                        className="w-full rounded-2xl border border-white/10 bg-[#0a0a0c]"
+                        style={{ height: 'calc(100vh - 13rem)', minHeight: 520 }}
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        allow="fullscreen; clipboard-write"
+                    />
+                </div>
+            );
+        };
 
         const App = () => {
             const [activeTab, setActiveTab] = useState('home');
